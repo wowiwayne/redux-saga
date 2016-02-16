@@ -1,31 +1,43 @@
+import { noop } from './utils'
 
+export const END = Symbol('END')
 
 export default function createChannel () {
-  const putQueue = []
-  const takeQueue = []
-  let closed
+  let putQueue = []
+  let takeQueue = []
+  let closed = false
 
-  function put(msg, cb) {
+  function put(msg, cb = noop) {
     // putting not allowed on closed channels
     if(closed)
-      cb(false)
+      return cb(false)
+
+    if(msg === END) {
+      // do not allow more puts
+      closed = true
+    }
 
     // anyone waiting for a message ?
     if (takeQueue.length) {
-      // deliver the message to the oldest one waiting (First In First Out)
-      const takeCb = takeQueue.shift()
-      takeCb(msg)
+      if(msg === END) {
+        // END is a broadcast message
+        takeQueue.forEach(takeCb => takeCb(END))
+        takeQueue = []
+      } else {
+        // deliver the message to the oldest one waiting (First In First Out)
+        const takeCb = takeQueue.shift()
+        takeCb(msg)
+      }
       cb(true)
-    } else {
-      // no one is waiting ? queue the event
+    }
+    // no one is waiting ? queue the event/putter
+    else {
       putQueue.push([msg, cb])
     }
   }
 
   // returns a Promise resolved with the next message
-  function take(cb) {
-    if(closed)
-      cb(null)
+  function take(cb = noop) {
     // do we have queued messages ?
     if (putQueue.length) {
       // deliver the oldest queued message
@@ -33,25 +45,31 @@ export default function createChannel () {
       cb(msg)
       putCb(true)
     } else {
-      // no queued messages ? queue the taker until a message arrives
-      takeQueue.push(cb)
+      // no queued messages ?
+      if(closed) {
+        cb(END)
+      } else {
+        // queue the taker until a message arrives
+        takeQueue.push(cb)
+      }
     }
   }
 
-  function close() {
-    closed = true
-    // resume all takers with null
-    takeQueue.forEach(takeCb => takeCb(null))
-    // resume all putters with false
-    /* eslint-disable no-unused-vars */
-    putQueue.forEach(([_, putCb]) => putCb(false))
+  function close(cb = noop) {
+    if(closed)
+      return cb(false)
+
+    // one more put
+    put(END, cb)
   }
 
   return {
     take,
     put,
     close,
-
-    __state__: { putQueue, takeQueue }
+    /* a debug untility */
+    get __state__(){
+      return { putQueue, takeQueue, closed }
+    }
   }
 }
