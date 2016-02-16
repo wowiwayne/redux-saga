@@ -1,4 +1,4 @@
-
+/*
 import './middleware'
 
 import './proc/base'
@@ -22,3 +22,6 @@ import './recipes/takeSync'
 
 import './sagaHelpers/takeEvery'
 import './sagaHelpers/takeLatest'
+*/
+
+import './channels/channel'
