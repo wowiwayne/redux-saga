@@ -3,9 +3,7 @@ import proc from '../../src/internal/proc'
 import { is, arrayOfDeffered } from '../../src/utils'
 import * as io from '../../src/effects'
 
-const DELAY = 50
-const delay = (ms) => () => new Promise(resolve => setTimeout(resolve, ms))
-
+const DELAY = 0
 test('processor fork handling: generators', assert => {
   assert.plan(4);
 
@@ -102,9 +100,7 @@ test('processor join handling : generators', assert => {
   const input = cb => {
     Promise.resolve(1)
       .then(() => defs[0].resolve(true))
-      .then(delay(0))
       .then(() => cb({type: 'action-1'}))
-      .then(delay(0))
       .then(() => defs[1].resolve(2))   // the result of the fork will be resolved the last
                                         // proc must not block and miss the 2 precedent effects
 

@@ -3,7 +3,7 @@ import proc from '../../src/internal/proc'
 import { deferred } from '../../src/utils'
 import * as io from '../../src/effects'
 
-const DELAY = 50
+const DELAY = 0
 
 test('processor race between effects handling', assert => {
   assert.plan(1);

@@ -3,8 +3,7 @@ import proc from '../../src/internal/proc'
 import { deferred, arrayOfDeffered } from '../../src/utils'
 import * as io from '../../src/effects'
 
-const DELAY = 50
-const delay = (ms) => () => new Promise(resolve => setTimeout(resolve, ms))
+const DELAY = 0
 
 test('processor array of effects handling', assert => {
   assert.plan(1);
@@ -19,7 +18,6 @@ test('processor array of effects handling', assert => {
     Promise.resolve(1)
       .then(() => def.resolve(1))
       .then(() => cpsCb.cb(null, cpsCb.val))
-      .then(() => delay(0))
       .then(() => cb({type: 'action'}))
     return () => {}
   }

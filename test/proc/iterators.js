@@ -3,7 +3,7 @@ import proc from '../../src/internal/proc'
 import { arrayOfDeffered } from '../../src/utils'
 import * as io from '../../src/effects'
 
-const DELAY = 100
+const DELAY = 0
 
 test('processor nested iterator handling', assert => {
   assert.plan(1);

@@ -92,8 +92,8 @@ test('parallel take handling of synchronous actions', assert => {
   store.dispatch({type: 'a2'})
 
   setTimeout(() => {
-    assert.deepEqual(actual, [],
-      "parallel takes are not allowed (and meaningless)"
+    assert.deepEqual(actual, [[{type: 'a1'}, {type: 'a2'}]],
+      "parallel must take parallel actions"
     );
     assert.end();
   })

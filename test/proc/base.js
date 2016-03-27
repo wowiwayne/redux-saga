@@ -3,8 +3,6 @@ import proc, { NOT_ITERATOR_ERROR } from '../../src/internal/proc'
 import { is } from '../../src/utils'
 import * as io from '../../src/effects'
 
-const DELAY = 50
-
 test('processor iteration', assert => {
   assert.plan(4)
 
@@ -77,6 +75,6 @@ test('processor output handling', assert => {
       "processor must handle generator output"
     );
     assert.end();
-  }, DELAY)
+  }, 0)
 
 });

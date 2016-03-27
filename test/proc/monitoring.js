@@ -4,7 +4,7 @@ import { noop, arrayOfDeffered } from '../../src/utils'
 import * as io from '../../src/effects'
 import { monitorActions } from '../../src/utils'
 
-const DELAY = 50
+const DELAY = 0
 
 test('processor monitoring handling', assert => {
   assert.plan(6);

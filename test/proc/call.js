@@ -2,7 +2,7 @@ import test from 'tape';
 import proc from '../../src/internal/proc'
 import * as io from '../../src/effects'
 
-const DELAY = 50
+const DELAY = 0
 
 test('processor handles call effects and resume with the resolved values', assert => {
   assert.plan(1);
