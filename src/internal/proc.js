@@ -1,17 +1,10 @@
-import { sym, noop, is, isDev, check, remove, deferred, autoInc, asap, TASK } from './utils'
-import { asEffect, matcher } from './io'
+import { sym, noop, is, isDev, check, deferred, autoInc, asap, TASK } from './utils'
+import { asEffect } from './io'
 import * as monitorActions from './monitorActions'
 import SagaCancellationException from './SagaCancellationException'
-
+import { eventChannel } from './emitter'
 
 export const NOT_ITERATOR_ERROR = 'proc first argument (Saga function result) must be an iterator'
-export const undefindInputError = name => `
-  ${name} saga was provided with an undefined input action
-  Hints :
-  - check that your Action Creator returns a non undefined value
-  - if the Saga was started using runSaga, check that your subscribe source provides the action to its listeners
-`
-
 export const CANCEL = sym('@@redux-saga/cancelPromise')
 export const PARALLEL_AUTO_CANCEL = 'PARALLEL_AUTO_CANCEL'
 export const RACE_AUTO_CANCEL = 'RACE_AUTO_CANCEL'
@@ -32,29 +25,11 @@ export default function proc(
 
   check(iterator, is.iterator, NOT_ITERATOR_ERROR)
 
-  const UNDEFINED_INPUT_ERROR = undefindInputError(name)
-
-  // tracks the current `take` effects
-  let deferredInputs = []
+  const SELF = sym('@@redux-saga/SELF')
+  const stdChannel = eventChannel(subscribe)
 
   // Promise to be resolved/rejected when this generator terminates (or throws)
   const deferredEnd = deferred()
-
-  // subscribe to input events, this will resolve the current `take` effects
-  const unsubscribe = subscribe(input => {
-    if(input === undefined)
-      throw UNDEFINED_INPUT_ERROR
-
-    for (let i = 0; i < deferredInputs.length; i++) {
-      const def = deferredInputs[i]
-      if(def.match(input)) {
-        // cancel all deferredInputs; parallel takes are disallowed
-        // and in concurrent takes, first wins
-        deferredInputs = []
-        def.resolve(input)
-      }
-    }
-  })
 
   /**
     cancel : (SagaCancellationException) -> ()
@@ -151,7 +126,7 @@ export default function proc(
       iterator._error = result
       deferredEnd.reject(result)
     }
-    unsubscribe()
+    stdChannel.unsubscribe()
   }
 
   function runEffect(effect, parentEffectId, label = '', cb) {
@@ -261,15 +236,16 @@ export default function proc(
     )
   }
 
-  function runTakeEffect(pattern, cb) {
-    const def = {
-      match : matcher(pattern),
-      pattern,
-      resolve: input => cb(null, input)
+  function runTakeEffect({observable, pattern}, cb) {
+    let chan
+    if(observable) {
+      const subscribe = observable.subscribe
+      chan = subscribe[SELF] || (subscribe[SELF] = eventChannel(subscribe))
     }
-    deferredInputs.push(def)
-    // cancellation logic for take effect
-    cb.cancel = () => remove(deferredInputs, def)
+    else
+      chan = stdChannel
+
+    chan.take(pattern, cb)
   }
 
   function runPutEffect(action, cb) {

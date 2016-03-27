@@ -1,4 +1,4 @@
-import { sym, is, kTrue, ident, check, TASK } from './utils'
+import { sym, is, ident, check, TASK } from './utils'
 
 
 export const CALL_FUNCTION_ARG_ERROR = "call/cps/fork first argument must be a function, an array [context, function] or an object {context, fn}"
@@ -22,28 +22,22 @@ const SELECT  = 'SELECT'
 
 const effect = (type, payload) => ({ [IO]: true, [type]: payload })
 
-const matchers = {
-  wildcard  : () => kTrue,
-  default   : pattern => input => input.type === pattern,
-  array     : patterns => input => patterns.some( p => p === input.type ),
-  predicate : predicate => input => predicate(input)
-}
-
-export function matcher(pattern) {
-  return (
-      pattern === '*'   ? matchers.wildcard
-    : is.array(pattern) ? matchers.array
-    : is.func(pattern)  ? matchers.predicate
-    : matchers.default
-  )(pattern)
-}
-
-export function take(pattern){
-  if (arguments.length > 0 && is.undef(pattern)) {
-    throw new Error(INVALID_PATTERN)
+export function take(observable, pattern) {
+  if(arguments.length >= 2) {
+    if(is.undef(observable))
+      throw new Error('undefined observable argument passed to take')
+    else if(!is.func(observable.subscribe)) {
+      throw new Error('Invalid observable argument passed to take, an observable must have a `subscribe` method')
+    }
+  } else if(arguments.length === 1) {
+    pattern = observable
+    observable = null
+    check(pattern, is.notUndef, INVALID_PATTERN)
+  } else {
+    pattern = '*'
   }
 
-  return effect(TAKE, is.undef(pattern) ? '*' : pattern)
+  return effect(TAKE, {observable, pattern})
 }
 
 export function put(action) {

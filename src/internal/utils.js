@@ -1,4 +1,6 @@
-export const sym = id => `@@redux-saga/${id}`
+const suid = autoInc()
+
+export const sym = (id, hasSuid) => `@@redux-saga/${id}${hasSuid ? suid():''}`
 
 export const TASK  = sym('TASK')
 export const kTrue = () => true
@@ -17,6 +19,7 @@ export function check(value, predicate, error) {
 export const is = {
   undef     : v => v === null || v === undefined,
   notUndef  : v => v !== null && v !== undefined,
+  string    : v => typeof v === 'string',
   func      : f => typeof f === 'function',
   array     : Array.isArray,
   promise   : p => p && is.func(p.then),
