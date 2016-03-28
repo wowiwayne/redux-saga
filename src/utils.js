@@ -1,4 +1,4 @@
-import {
+export {
   TASK,
   noop,
   is,
@@ -7,33 +7,17 @@ import {
   asap
 } from './internal/utils'
 
-import { asEffect } from './internal/io'
+export { asEffect } from './internal/io'
 
-import {
+export {
   CANCEL,
   RACE_AUTO_CANCEL,
   PARALLEL_AUTO_CANCEL,
   MANUAL_CANCEL
 } from './internal/proc'
 
-import { createMockTask } from './internal/testUtils'
+export { channel, emitter, END } from './internal/channel'
+export { createMockTask } from './internal/testUtils'
 
 import * as monitorActions from './internal/monitorActions'
-
-export {
-  TASK,
-  noop,
-  is, asEffect,
-  deferred,
-  arrayOfDeffered,
-  asap,
-
-  CANCEL,
-  RACE_AUTO_CANCEL,
-  PARALLEL_AUTO_CANCEL,
-  MANUAL_CANCEL,
-
-  createMockTask,
-
-  monitorActions
-}
+export { monitorActions }
