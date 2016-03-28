@@ -1,7 +1,7 @@
 /* eslint-disable no-constant-condition */
 
 import { take, put, call, fork, race } from 'redux-saga/effects'
-import { END } from 'redux-saga'
+import { END } from 'redux-saga/utils'
 import { INCREMENT_ASYNC, INCREMENT, CANCEL_INCREMENT_ASYNC } from '../actionTypes'
 
 const action = type => ({type})
