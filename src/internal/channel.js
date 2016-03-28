@@ -53,8 +53,10 @@ export function channel() {
 
   function put(input) {
     //log()
-    if(input === undefined) throw new Error(UNDEFINED_INPUT_ERROR)
-    if(closed) throw new Error(MSG_AFTER_END_ERROR)
+    if(input === undefined)
+      input = new Error(UNDEFINED_INPUT_ERROR)
+    else if(closed)
+      input = new Error(MSG_AFTER_END_ERROR)
 
     const isError = input instanceof Error
     closed = input === END || isError
