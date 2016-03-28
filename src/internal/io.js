@@ -5,7 +5,7 @@ export const CALL_FUNCTION_ARG_ERROR = "call/cps/fork first argument must be a f
 export const FORK_ARG_ERROR   = "fork first argument must be a generator function or an iterator"
 export const JOIN_ARG_ERROR   = "join argument must be a valid task (a result of a fork)"
 export const CANCEL_ARG_ERROR = "cancel argument must be a valid task (a result of a fork)"
-export const INVALID_PATTERN  = "Invalid pattern passed to `take` (HINT: check if you didn't mispell a constant)"
+export const INVALID_PATTERN_OR_CHANNEL  = "Invalid pattern/channel passed to `take` (HINT: check if you didn't mispell a constant/property)"
 export const SELECT_ARG_ERROR = "select first argument must be a function"
 
 
@@ -22,22 +22,23 @@ const SELECT  = 'SELECT'
 
 const effect = (type, payload) => ({ [IO]: true, [type]: payload })
 
-export function take(observable, pattern) {
+export function take(channel, pattern) {
   if(arguments.length >= 2) {
-    if(is.undef(observable))
-      throw new Error('undefined observable argument passed to take')
-    else if(!is.func(observable.subscribe)) {
-      throw new Error('Invalid observable argument passed to take, an observable must have a `subscribe` method')
-    }
+    if(is.undef(channel))
+      throw new Error('undefined channel argument passed to take')
+    else if(!is.channel(channel))
+      throw new Error('Invalid channel passed to take (a channel must have a `take` or `subscribe` method)')
   } else if(arguments.length === 1) {
-    pattern = observable
-    observable = null
-    check(pattern, is.notUndef, INVALID_PATTERN)
+    check(channel, is.notUndef, INVALID_PATTERN_OR_CHANNEL)
+    if(!is.channel(channel)) {
+      pattern = channel
+      channel = null
+    }
   } else {
     pattern = '*'
   }
 
-  return effect(TAKE, {observable, pattern})
+  return effect(TAKE, {channel, pattern})
 }
 
 export function put(action) {

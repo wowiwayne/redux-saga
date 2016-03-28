@@ -2,7 +2,7 @@ import { sym, noop, is, isDev, check, deferred, autoInc, asap, TASK } from './ut
 import { asEffect } from './io'
 import * as monitorActions from './monitorActions'
 import SagaCancellationException from './SagaCancellationException'
-import { eventChannel } from './emitter'
+import { eventChannel } from './channel'
 
 export const NOT_ITERATOR_ERROR = 'proc first argument (Saga function result) must be an iterator'
 export const CANCEL = sym('@@redux-saga/cancelPromise')
@@ -27,6 +27,7 @@ export default function proc(
 
   const SELF = sym('@@redux-saga/SELF')
   const stdChannel = eventChannel(subscribe)
+  let otherChannels = []
 
   // Promise to be resolved/rejected when this generator terminates (or throws)
   const deferredEnd = deferred()
@@ -127,6 +128,10 @@ export default function proc(
       deferredEnd.reject(result)
     }
     stdChannel.unsubscribe()
+    for (let i = 0, len = otherChannels.length; i < len; i++) {
+      otherChannels[i].unsubscribe()
+    }
+    otherChannels = null
   }
 
   function runEffect(effect, parentEffectId, label = '', cb) {
@@ -236,16 +241,21 @@ export default function proc(
     )
   }
 
-  function runTakeEffect({observable, pattern}, cb) {
-    let chan
-    if(observable) {
-      const subscribe = observable.subscribe
-      chan = subscribe[SELF] || (subscribe[SELF] = eventChannel(subscribe))
-    }
-    else
-      chan = stdChannel
+  function newEventChannel(subscribe) {
+    const chan = eventChannel(subscribe)
+    subscribe[SELF] = chan
+    otherChannels.push(chan)
+    return chan
+  }
 
-    chan.take(pattern, cb)
+  function runTakeEffect({channel, pattern}, cb) {
+    const subscribe = channel && channel.subscribe
+    if(subscribe) {
+      channel = subscribe[SELF] || newEventChannel(subscribe)
+    } else
+      channel = channel || stdChannel
+
+    channel.take(pattern, cb)
   }
 
   function runPutEffect(action, cb) {
