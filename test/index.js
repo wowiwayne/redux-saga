@@ -14,6 +14,8 @@ import './proc/monitoring'
 import './proc/cancellation'
 import './proc/select'
 
+import './channel'
+
 import './SagaCancellationException'
 
 import './runSaga'
