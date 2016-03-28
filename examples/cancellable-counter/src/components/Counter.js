@@ -12,9 +12,9 @@ import {
 } from '../actionTypes'
 
 
-function Counter({counter, incrementAsyncPending, congratulate, dispatch}) {
+function Counter({counter, countdown, congratulate, dispatch}) {
 
-      const action = type => () => dispatch({type})
+      const action = (type, value) => () => dispatch({type, value})
 
       const congratulationMsg = (
         congratulate
@@ -37,10 +37,10 @@ function Counter({counter, incrementAsyncPending, congratulate, dispatch}) {
             <button onClick={action(INCREMENT_IF_ODD)}>Increment if odd</button>
             {' '}
             <button
-              onClick={incrementAsyncPending ? action(CANCEL_INCREMENT_ASYNC) : action(INCREMENT_ASYNC)}
-              style={{color: incrementAsyncPending ? 'red' : 'black'}}>
+              onClick={countdown ? action(CANCEL_INCREMENT_ASYNC) : action(INCREMENT_ASYNC, 5)}
+              style={{color: countdown ? 'red' : 'black'}}>
 
-              {incrementAsyncPending ? 'Cancel increment' : 'increment after 1s'}
+              {countdown ? `Cancel increment (${countdown})` : 'increment after 5s'}
             </button>
           </p>
           { congratulationMsg }
@@ -55,7 +55,7 @@ Counter.propTypes = {
   dispatch: PropTypes.func.isRequired,
   // state
   counter: PropTypes.number.isRequired,
-  incrementAsyncPending: PropTypes.bool.isRequired,
+  countdown: PropTypes.number.isRequired,
   congratulate: PropTypes.bool.isRequired
 }
 
@@ -63,7 +63,7 @@ function mapStateToProps(state) {
   return {
     counter: state.counter,
     congratulate: state.congratulate,
-    incrementAsyncPending: state.incrementAsyncPending
+    countdown: state.countdown
   }
 }
 
