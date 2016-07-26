@@ -4,7 +4,7 @@
 
 `redux-saga` 是一個針對在 React/Redux 應用程式中，可以更容易建立 side effect 的 library（例如：非同步的事件像是資料的 fetch 和存取瀏覽器的快取）。
 
-想法上，redux-saga 像是一個獨立的 thread 在你的應用程式，專門負責 side effect。`redux-saga` 是 redux 的 middleware，意思說這個 thread 可以被啟動、暫停和取消從主要的應用程式標準的 redux action，它可以存取整個 redux 應用程式的 state 和 dispatch。
+想法上，redux-saga 像是一個獨立的 thread 在你的應用程式，專門負責 side effect。`redux-saga` 是 redux 的 middleware，意思說從主要應用程式標準的 redux action 可以啟動、暫停和取消 thread，它可以存取整個 redux 應用程式的 state 和 dispatch redux 的 action。
 
 使用 ES6 的 Generators 功能讓非同步的流程可以更容易閱讀、撰寫和測試，*如果你還不熟悉的話，[這裡有一些介紹的連結](https://yelouafi.github.io/redux-saga/docs/ExternalResources.html)*。透過這樣的方式，這些非同步的流程看起來就像標準 JavaScript 同步程式碼（像是 `async`/`await`，但是 generators 還有一些更棒而且我們需要的功能）。
 
@@ -18,7 +18,7 @@
 $ npm install --save redux-saga
 ```
 
-或者，你可以直接在 HTML 頁面 `<script>` 標籤使用提供的 UMD build。參考[這個章節](#using-umd-build-in-the-browser)。
+或者，你可以直接在 HTML 頁面 `<script>` 標籤使用提供的 UMD build，請參考[這個章節](#using-umd-build-in-the-browser)。
 
 ## 使用範例
 
@@ -65,7 +65,8 @@ function* mySaga() {
 /*
   另外你也可以使用 takeLatest。
 
-  但不允許並行取得使用者。當一個 fetch 已經在 pending 時，如果取得 dispatch「USER_FETCH_REQUESTED」，正在等待的 fetch 會被取消，只執行最新的發出的 USER_FETCH_REQUESTED。
+  但不允許並行取得使用者。當一個 fetch 已經在 pending 時，如果取得 dispatch「USER_FETCH_REQUESTED」，
+  正在等待的 fetch 會被取消，只執行最新的發出的 USER_FETCH_REQUESTED。
 */
 function* mySaga() {
   yield* takeLatest("USER_FETCH_REQUESTED", fetchUser);
@@ -110,7 +111,7 @@ sagaMiddleware.run(mySaga)
 - [術語表](http://yelouafi.github.io/redux-saga/docs/Glossary.html)
 - [API 參考](http://yelouafi.github.io/redux-saga/docs/api/index.html)
 
-這裡也有一個[簡體中文版本的文件](https://github.com/superRaytin/redux-saga-in-chinese)感謝 @superRaytin（你也可以檢查引用的 redux-saga 版本）。
+這裡也有一個[簡體中文版本的文件](https://github.com/superRaytin/redux-saga-in-chinese)，感謝 @superRaytin（你也可以檢查引用的 redux-saga 版本）。
 
 
 
