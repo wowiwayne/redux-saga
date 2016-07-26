@@ -505,6 +505,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	  });
 
+	  if (!_utils.is.func(unsubscribe)) {
+	    throw new Error('in eventChannel: subscribe should return a function to unsubscribe');
+	  }
+
 	  return {
 	    take: chan.take,
 	    close: function close() {
@@ -1226,7 +1230,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	      ATTENTION! calling cancel must have no effect on an already completed or cancelled effect
 	    **/
 	    var data = void 0;
-	    return(
+	    return (
 	      // Non declarative effect
 	      _utils.is.promise(effect) ? resolvePromise(effect, currCb) : _utils.is.iterator(effect) ? resolveIterator(effect, effectId, name, currCb)
 
