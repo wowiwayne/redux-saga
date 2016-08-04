@@ -1,8 +1,8 @@
-# Examples of Testing Sagas
+# Saga 測試的範例
 
 **WIP**
 
-See Repository Examples:
+參考 Repository 範例：
 
 https://github.com/yelouafi/redux-saga/blob/master/examples/counter/test/sagas.js
 

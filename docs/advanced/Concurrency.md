@@ -1,8 +1,8 @@
-# Concurrency
+# 常見的併發模式
 
-In the basics section, we saw how to use the helper functions `takeEvery` and `takeLatest` in order to manage concurrency between Effects.
+在基礎的部份，我們看到如何使用 `takeEvery` 和 `takeLatest` helper function 來管理 Effect 之間的併發。
 
-In this section we'll see how those helpers are implemented using the low-level Effects.
+在這個部份我將看到使用低階的 Effect 如何實現那些 helper。
 
 ## `takeEvery`
 
@@ -15,7 +15,7 @@ function* takeEvery(pattern, saga, ...args) {
 }
 ```
 
-`takeEvery` allows multiple `saga` tasks to be forked concurrently.
+允許多個 `saga` task 同時被 fork 。
 
 ## `takeLatest`
 
@@ -25,13 +25,13 @@ function* takeLatest(pattern, saga, ...args) {
   while (true) {
     const action = yield take(pattern)
     if (lastTask) {
-      yield cancel(lastTask) // cancel is no-op if the task has already terminated
+      yield cancel(lastTask) // 如果 task 已經被終止的話，cancel 是一個空的操作
     }
     lastTask = yield fork(saga, ...args.concat(action))
   }
 }
 ```
 
-`takeLatest` doesn't allow multiple Saga tasks to be fired concurrently. As soon as it gets a new dispatched action, it cancels any previously-forked task (if still running).
+`takeLatest` 不允許多個 saga task 被同時觸發。一旦接收一個新的 dispatch action，它取消任何先前被 fork 的 task（如果 task 持續執行的話）。
 
-`takeLatest` can be useful to handle AJAX requests where we want to only have the response to the latest request.
+在處理 AJAX 請求時，我希望只能在最後一個請求的時候得到 response，`takeLatest` 會非常的有用。
