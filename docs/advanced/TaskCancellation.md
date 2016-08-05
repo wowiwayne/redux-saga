@@ -57,13 +57,13 @@ function* main() {
 
 function* subtask() {
   ...
-  yield call(subtask2) // 在這個 call 目前被阻塞
+  yield call(subtask2) // 這個 call 目前被阻塞
   ...
 }
 
 function* subtask2() {
   ...
-  yield call(someApi) // 在這個 call 目前被阻塞
+  yield call(someApi) // 這個 call 目前被阻塞
   ...
 }
 ```

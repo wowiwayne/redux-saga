@@ -18,6 +18,7 @@
   * [使用 yield* 對 Saga 做排序](/docs/advanced/SequencingSagas.md)
   * [組合 Saga](/docs/advanced/ComposingSagas.md)
   * [取消 Task](/docs/advanced/TaskCancellation.md)
+  * [redux-saga 的 fork 模型](/docs/advanced/ForkModel.md)
   * [常見的併發模式](/docs/advanced/Concurrency.md)
   * [Saga 測試的範例](/docs/advanced/Testing.md)
   * [連結 Saga 到外部的輸入和輸出](/docs/advanced/UsingRunSaga.md)
