@@ -1,42 +1,42 @@
-# Troubleshooting
+# 疑難排解
 
-### App freezes after adding a saga
+### 加入 Saga 後應用程式停住了
 
-Make sure that you `yield` the effects from the generator function.
+確認你 `yield` 的 effect 來自 generator function。
 
-Consider this example:
-
-```js
-import { take } from 'redux-saga/effects'
-
-function* logActions() {
-  while (true) {
-    const action = take() // wrong
-    console.log(action)
-  }
-}
-```
-
-It will put the application into an infinite loop because `take()` only creates a description of the effect. Unless you `yield` it for the middleware to execute, the `while` loop will behave like a regular `while` loop, and freeze your application.
-
-Adding `yield` will pause the generator and return control to the Redux Saga middleware which will execute the effect. In case of `take()`, Redux Saga will wait for the next action matching the pattern, and only then will resume the generator.
-
-To fix the example above, simply `yield` the effect returned by `take()`:
+考慮以下的範例：
 
 ```js
 import { take } from 'redux-saga/effects'
 
 function* logActions() {
   while (true) {
-    const action = yield take() // correct
+    const action = take() // 錯誤
     console.log(action)
   }
 }
 ```
 
-### My Saga is missing dispatched actions when using multiple `yield* takeEvery/yield* takeLatest`
+這會讓應用程式進入無窮迴圈，因為 `take` 只建立一個 effect 的描述。除非你 `yield` 到 middleware 去執行，否則上面的 `while` 就像正常的 `while` 迴圈，並凍結你的應用程式。
 
-You're likely running multiple `yield*` statements inside the same Saga
+加入 `yield` 將暫停 generator，並將控制回傳給 Redux Saga middleware 執行 effect。在 `take()` 的情況中，Redux Saga 等待下一個符合的 action，並恢復 generator。
+
+為了修正上面的範例，只要 `yield` `take()` 回傳的 effect：
+
+```js
+import { take } from 'redux-saga/effects'
+
+function* logActions() {
+  while (true) {
+    const action = yield take() // 正確
+    console.log(action)
+  }
+}
+```
+
+### 當使用多個 `yield* takeEvery/yield* takeLatest`，Saga 忽略了 dispatch 的 action
+
+你可能在同一個 Saga 執行多個 `yield*`
 
 ```javascript
 function* mySaga() {
@@ -45,8 +45,7 @@ function* mySaga() {
 }
 ```
 
-Instead you'll either have to run them in different Sagas. Or run them in parallel using
-`yield [...]` (without the `*`)
+你可以在不同的 Saga 執行他們，或者執行使用 `yield [...]` 同時執行（沒有 `*`）
 
 ```javascript
 function* mySaga() {
@@ -57,31 +56,23 @@ function* mySaga() {
 }
 ```
 
-### Explication
+### 解釋
 
-`yield*` is used to *delegate* control to other iterators. In the above example, the first
-`takeEvery(ACTION_1, doSomeWork)` returns an iterator object. Combined with `yield*` the `mySaga`
-generator will delegate all its `next()` calls to the returned iterator. This means any call to
-`next()` of `mySaga` will forward to `next()` of the `takeEvery(...)` iterator. And only after the
-the `takeEvery(...)` iterator is done, the call to the second `yield* takeEvery(ACTION_2, doSomeWork)`
-will proceed (since `takeEvery(...)` is executing a `while (true) {...}` under the hoods. The
-first iterator will never terminate so the second call will never proceed).
+`yeild` 使用*代理（delegate）* 控制給其他迭代器。在上面的範例，第一個 `takeEvery(ACTION_1, doSomeWork)` 回傳一個迭代物件。由於結合 `yield*` ，`mySaga` generator 將代理所有 `next()` 呼叫到被回傳的迭代器。意思說所有呼叫到 `mySaga` 的 `next(）` 將轉發到 `takeEvery()` 迭代器的 `next()`。在 `takeEvery(...)` 迭代器完成後，才會繼續第二個 `yield* takeEvery(ACTION_2, doSomeWork)`（由於 `takeEvery(...)` 執行一個 `while (true) {...}`，第一個迭代器如果沒有終止，第二個呼叫就不會繼續）。
 
-With the parallel form `yield [takeEvery(...), ...]` The middleware will run all the returned
-iterators in parallel.
+在 `yield [takeEvery(...), ...]` 形式中，middleware 將同時執行所有回傳的迭代器。
 
-### My Saga is missing dispatched actions
+### Saga 忽略 dispatch 的 action
 
-Make sure the Saga is not blocked on some effect. When a Saga is waiting for an Effect to
-resolve, it will not be able to take dispatched actions until the Effect is resolved.
+確認 Saga 不會被阻塞在某些 effect，當 Saga 等待一個 Effect resolve，它不會 take 被 dispatch 的 action，直到 Effect 被 resolve。
 
-For example, consider this example
+例如，考慮以下的範例：
 
 ```javascript
 function watchRequestActions() {
   while (true) {
     const {url, params} = yield take('REQUEST')
-    yield call(handleRequestAction, url, params) // The Saga will block here
+    yield call(handleRequestAction, url, params) // Saga 將在這阻塞
   }
 }
 
@@ -91,9 +82,7 @@ function handleRequestAction(url, params) {
 }
 ```
 
-When `watchRequestActions` performs `yield call(handleRequestAction, url, params)`, it'll wait
-for `handleRequestAction` until it terminates an returns before continuing on the next
-`yield take`. For example suppose we have this sequence of events
+當 `watchRequestActions` 執行 `yield call(handleRequestAction, url, params)` 時，它會在下一個 `yield take` 之前，等待 `handleRequestAction` 直到它終止回傳。例如，假設我們有一個事件的順序是這樣：
 
 ```
 UI                     watchRequestActions             handleRequestAction  
@@ -109,16 +98,15 @@ dispatch(REQUEST)............................................................ Ac
 .......................take('REQUEST')....................................... saga is resumed
 ```
 
-As illustrated above, when a Saga is blocked on a **blocking call** then it will miss
-all the actions dispatched in-between.
+根據上述，當一個 Saga 被阻塞在 **blocking call**，它將忽略所有被 dispatch 的 action。
 
-To avoid blocking the Saga, you can use a **non-blocking call** using `fork` instead of `call`
+為了避免阻塞的 Saga，你可以使用 **non-blocking call** `fork` 來替代 `call`。
 
 ```javascript
 function watchRequestActions() {
   while (true) {
     const {url, params} = yield take('REQUEST')
-    yield fork(handleRequestAction, url, params) // The Saga will resume immediately
+    yield fork(handleRequestAction, url, params) // Saga 將立刻恢復
   }
 }
 ```

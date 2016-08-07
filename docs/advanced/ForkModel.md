@@ -1,3 +1,3 @@
-# redux-saga's fork model
+# redux-saga 的 fork 模型
 
 **WIP**
