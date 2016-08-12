@@ -55,7 +55,7 @@ assert.deepEqual(
 
 ```javascript
 import Api from './path/to/api'
-import { take, put } from 'redux-saga/effects'
+import { call, put } from 'redux-saga/effects'
 
 function fetchProductsApi() {
   return Api.fetch('/products')
