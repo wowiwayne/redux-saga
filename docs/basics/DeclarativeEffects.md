@@ -97,7 +97,11 @@ assert.deepEqual(
 
 這些*宣告的呼叫*的優點是，我們透過簡單的迭代 Generator，並在 yield 成功後得到的值做 `deepEqual` 測試，就可以測試所有在 Saga 的邏輯。這是真實的好處，你複雜的非同步操作不再是黑盒，不管它多麼複雜，你都可以測試每一個項目的操作邏輯。
 
+<<<<<<< HEAD
 `call` 也支援調用物件的方法，使用以下的形式，你可以提供一個 `this` context 到調用的 function：
+=======
+`call` also supports invoking object methods, you can provide a `this` context to the invoked functions using the following form:
+>>>>>>> c6f8b6b556458bb9a5f3386f5e9af7051cb9a870
 
 ```javascript
 yield call([obj, obj.method], arg1, arg2, ...) // 如同我們使用 obj.method(arg1, arg2 ...)
