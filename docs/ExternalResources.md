@@ -14,7 +14,8 @@
 - [使用 Saga 掌握複雜的 Redux Workflows](http://konkle.us/master-complex-redux-workflows-with-sagas/) by Brandon Konkle
 - [使用 Saga 在 Redux 處理非同步](http://wecodetheweb.com/2016/01/23/handling-async-in-redux-with-sagas/) by Niels Gerritsen
 - [在 Redux 處理認證的秘訣](https://medium.com/@MattiaManzati/tips-to-handle-authentication-in-redux-2-introducing-redux-saga-130d6872fbe7#.g49x2gj1g) by Mattia Manzati
-- [Build an Image Gallery Using React, Redux and redux-saga](http://joelhooks.com/blog/2016/03/20/build-an-image-gallery-using-redux-saga/?utm_content=bufferbadc3&utm_medium=social&utm_source=twitter.com&utm_campaign=buffer) by Joel Hooks
+- [使用 React、Redux 和 redux-saga 建立一個 Image Gallery](http://joelhooks.com/blog/2016/03/20/build-an-image-gallery-using-redux-saga/?utm_content=bufferbadc3&utm_medium=social&utm_source=twitter.com&utm_campaign=buffer) by Joel Hooks
+- [使用 redux saga 非同步操作](https://medium.com/@andresmijares25/async-operations-using-redux-saga-2ba02ae077b3#.556ey5blj) by Andrés Mijares
 
 ### Addons
 - [redux-saga-sc](https://www.npmjs.com/package/redux-saga-sc) – 在 SocketCluster websockets 提供 saga 容易的 dispatch redux action

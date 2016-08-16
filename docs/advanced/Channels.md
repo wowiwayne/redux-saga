@@ -160,6 +160,58 @@ export function* saga() {
 }
 ```
 
+這裡是另一個例子，你如何使用事件 channel 去傳送 WebSockeet 事件到你的 saga（例如：使用 socket.io library）。
+假設你等待伺服器的一個 `ping` 訊息，然後在 delay 後回覆一個 `pong` 訊息。
+
+```javascript
+import { take, put, call } from 'redux-saga/effects'
+import { eventChannel, delay } from 'redux-saga'
+import { createWebSocketConnection } from './socketConnection'
+
+// 這個 function 從給定的 socket 建立一個事件 channel
+// 設定訂閱傳入的 `ping` 事件
+function createSocketChannel(socket) {
+  // `eventChannel` 需要 subscriber function
+  // subscriber function 需要 `emit` 參數 put 訊息到 channel
+  return eventChannel(emit => {
+
+    const pingHandler = (event) => {
+      // put 事件 payload 到 channel
+      // 允許 Saga 從被回傳的 channel 帶著這個 payload
+      emit(event.payload)
+    }
+
+    // 設定訂閱
+    socket.on('ping', pingHandler)
+
+    // subscriber 必須回傳一個取消訂閱的 function
+    // 當 saga 呼叫 `channel.close` 方法時將被調用
+    const unsubscribe = () => {
+      socket.off('ping', pongHandler)
+    }
+
+    return unsubscribe
+  })
+}
+
+// 藉由調用的 `socket.emit('pong')` 回覆一個 `pong` 訊息
+function* pong() {
+  yield call(delay, 5000)
+  yield apply(socket, socket.emit, ['pong']) // 呼叫 `emit` 作為方法與 `socket`  作為 context
+}
+
+export function* watchOnPings() {
+  const socket = yield call(createWebSocketConnection)
+  const socketChannel = yield call(createSocketChannel, socket)
+
+  while (true) {
+    const payload = yield take(socketChannel)
+    yield put({ type: INCOMING_PONG_PAYLOAD, payload })
+    yield fork(pong, socket)
+  }
+}
+```
+
 > 注意：預設上，訊息在一個 eventChannel 不會被緩衝，你可以提供一個緩衝到 eventChannel factory 來指定 channel 的緩衝策略（例如：`eventChannel(subscriber, buffer)`），更多資訊請參考 API。
 
 ### 使用 channel 在 Saga 之間溝通
