@@ -753,9 +753,9 @@ const countdown = (secs) => {
 
 - `buffers.fixed(limit)`: 新訊息將會被緩衝到 `limit`。Overflow 會發生錯誤。省略 `limit` 的值將導致無限的緩衝。
 
-- `buffers.dropping(limit)`: 有一部份像是 `fixed`，但是 Overflow 時將丟棄訊息。
+- `buffers.dropping(limit)`: 像是 `fixed`，但是 Overflow 時將丟棄訊息。
 
-- `buffers.sliding(limit)`: 有一部份像是 `fixed`，但是 Overflow 時在結束時新增新訊息，並丟棄在 buffer 的舊訊息。
+- `buffers.sliding(limit)`: 像是 `fixed`，但是 Overflow 時在結束時新增新訊息，並丟棄在 buffer 的舊訊息。
 
 ### `delay(ms, [val])`
 
