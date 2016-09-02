@@ -184,3 +184,48 @@ export function* watchUpdateResource() {
 }
 
 ```
+
+## Undo
+
+undo 的行為是尊重使用者，在假設他們在不知道做什麼之前，允許讓 action 順利發生。[redux 文件](http://redux.js.org/docs/recipes/ImplementingUndoHistory.html) 的 [GoodUI](https://goodui.org/#8) 描述一個可靠的方法實作一個 undo，基於修改 reducer 包含 `past`、`present` 和 `future` state。甚至還有一個 library [redux-undo](https://github.com/omnidan/redux-undo) 建立一個 high order reducer 來為 developer 做更多繁重的工作。
+
+然而，這個方法監聽 store 參考，來提供應用程式先前的 state(s)。
+
+使用 redux-saga 的 `delay` 和 `cancel` 我們可以實作一個簡單、 one-time undo，不需要 enhance 我們的 reducer 和 store 先前的 state。
+
+```javascript
+import {  take, put, call, fork, cancel, cancelled } from 'redux-saga/effects'
+import { takeEvery, delay } from 'redux-saga'
+import { updateThreadApi, actions } from 'somewhere'
+
+function* onArchive() {
+  try {
+      const thread = { id: 1337, archived: true }
+      // 顯示 undo UI 元素
+      yield put(actions.showUndo())
+      // 樂觀地將 thread 標記為 `archived`
+      yield put(actions.updateThread(thread))
+      // 允許使用者操作 undo action 的時間
+      yield call(delay, 5000)
+      // 隱藏 undo UI 元素
+      yield put(actions.hideUndo())
+      // 讓 API 呼叫遠端應用更改
+      yield call(updateThreadApi, thread)
+  } finally {
+    if (yield cancelled()) {
+      // 還原到先前 state 的 thread
+      yield put(actions.updateThread({ id: 1337, archived: false }))
+    }
+  }
+}
+
+function* main() {
+  while (true) {
+    // 在非阻塞 manner 監聽每個 `ARCHIVE_THREAD` action
+    const onArchiveTask = yield fork(takeEvery, ARCHIVE_THREAD, onArchive)
+    // 等待使用者操作 undo action
+    yield take(UNDO)
+    // 然後取消 fetch task
+    yield cancel(onArchiveTask)
+  }
+}

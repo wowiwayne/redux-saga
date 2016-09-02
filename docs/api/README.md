@@ -39,7 +39,7 @@
   * [`runSaga(iterator, options)`](#runsagaiterator-options)
 * [`Utils`](#utils)
   * [`channel([buffer])`](#channelbuffer)
-  * [`eventChannel(subscribe, [buffer], matcher)`](#eventchannelsubscribebuffermatcher)
+  * [`eventChannel(subscribe, [buffer], matcher)`](#eventchannelsubscribe-buffer-matcher)
   * [`buffers`](#buffers)
   * [`delay(ms, [val])`](#delayms-val)
 
@@ -307,6 +307,8 @@ middleware 仍然會暫停，直到 `fn` 終止。
 
 - `args: Array<any>` - 一個陣列值被作為參數傳送到 `fn`
 
+回傳一個 [Task](#task) 物件。
+
 #### 注意
 
 `fork` 類似於 `call`，可以被用來調用普通 function 和 Generator function。但是，呼叫是非阻塞的，middleware 不會在 `fn` 等待結果而暫停 Generator。相反的會調用 `fn`，立即恢復 Generator。
@@ -315,9 +317,13 @@ middleware 仍然會暫停，直到 `fn` 終止。
 
 `yield fork(fn ...args)` 的結果是一個 [Task](#task) 物件。一個物件有一些有用的方法和屬性。
 
-所有被 fork task 被*附加*到他們的父 task。當父 task 說明本身主體已經結束執行，它將等待所有被 fork 的 task 在回傳之前結束。子 child 的 task 的錯誤會自動的向上冒泡到他們的父 task。如果任何被 fork 的 task 引發一個未捕獲的錯誤，父 task 將中止 child 錯誤，和取消整個父的執行 tree（例如：被 fork 的 task + *主要 task* 如果還在父主體執行）。
+所有被 fork task 被*附加*到他們的父 task。當父 task 說明本身主體已經結束執行，它將等待所有被 fork 的 task 在回傳之前結束。
 
-從其他的 Generator 取消父 task，將自動的取消所有被 fork 且仍在執行的 task。
+錯誤從子 task 自動冒泡（bubble up）到它的父 task。如果任何被 fork 的 task 發出一個未捕獲的錯誤，然後父 task 將 abort 子 task 錯誤，而且整個父的執行 tree（例如：如果父 task 本身表示被 fork 的 task + *主要 task* 仍然還在執行）將被取消。
+
+取消被 fork 的 Task 將自動取消所有仍然還在執行的 fork task。它也會取消目前被阻塞的 Effect （如果有的話）。
+
+如果一個被 fork task *同步*失敗了（例如：在執行之前執行任何非同步操作後立即失敗），然後沒有 task 被回傳，父 task 將馬上 abort task（由於父和子 task 在平行情況下執行，父 task 注意到子 task 失敗時，馬上 abort task）。
 
 如果要建立*分離*的 fork，使用 `spawn`。
 
