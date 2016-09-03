@@ -255,7 +255,7 @@ middleware 提供一個特別的 `END` action。如果你 dispatch END action，
 
 建立一個 Effect 描述，指示 middleware 呼叫 function `fn` 和 `args` 作為參數。
 
-- `fn: Function` - 一個 Generator function，或者正常的 function 回傳一個 Promise 做為結果
+- `fn: Function` - 一個 Generator function，或者正常的 function 回傳一個 Promise 或任何其他的值做為結果。
 
 - `args: Array<any>` - 一個陣列值被作為參數傳送到 `fn`
 
@@ -265,9 +265,11 @@ middleware 提供一個特別的 `END` action。如果你 dispatch END action，
 
 middleware 調用 function 並檢查它的結果。
 
-如果結果是一個 Generator 物件，middleware 執行它就像啟動 Generator（在啟動時被傳送到 middleware）一樣。父 Generator 將暫停直到子 Generator 正常結束，在這個情況父 Generator 被恢復並透過子 Generator 回傳值。或者，子 Generator 因為一些錯誤而終止，在這個情況父 Generator 會從內部拋出錯誤。
+如果結果是一個 Iterator 物件，middleware 將執行 Generator function（在啟動時被傳送到 middleware）。父 Generator 將暫停直到子 Generator 正常結束，在這個情況父 Generator 被恢復並透過子 Generator 回傳值。或者，子 Generator 因為一些錯誤而終止，在這個情況父 Generator 會從內部拋出錯誤。
 
 如果結果是一個 Promise，middleware 將暫停 Generator 直到 Promise 被 resolve，在這個情況恢復 Generator 與 resolve 後的值，或者直到 Promise 被 reject，透過 Generator 從內部拋出錯誤。
+
+如果結果不是一個 Iterator 物件或 Promise，middleware 將馬上回傳值給 saga，所以它可以恢復同步執行。
 
 當一個 Generator 從內部拋出錯誤。如果 `yield` 指令在 `try/catch` 區塊內，控制將會被傳送到 `catch` 區塊。除此之外，Generator 中止發起的錯誤，如果 Generator 透過其他 Generator 被呼叫，錯誤將傳播到其他呼叫的 Generator。
 
@@ -403,6 +405,7 @@ function* mySaga() {
 > 然而，這個行為只保證如果所有後續的 middleware 同步呼叫 `next(action)`。如果任何後續 middleware 非同步呼叫 `next(action)`（這是不正常的，但是可能發生），Saga 將從**之前**處理的 action 取得 state。因此建議檢查每個後續的 middlewar 的來源，以確保它同步呼叫 `next(action)`，或者確保該 redux-saga 是 call chain 中最後一個 middleware。
 
 #### 注意
+
 如果可以的話，一個 Saga 應該依賴本身內部的控制 state，但有時候
 Saga 最好可以獨立，而且不依賴在 Store 的 state。這可以讓它簡單去實作修改 state 而不影響 Saga 的程式碼。可以找到更方便 Saga 去查詢 state，而不是透過本身去管理所需的資料（例如：當一個 Saga 重複調用一些 reducer 的邏輯去計算一個 state，但它已經透過 Store 被計算了）。
 
