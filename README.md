@@ -111,9 +111,10 @@ sagaMiddleware.run(mySaga)
 - [術語表](http://yelouafi.github.io/redux-saga/docs/Glossary.html)
 - [API 參考](http://yelouafi.github.io/redux-saga/docs/api/index.html)
 
-這裡也有一個[簡體中文版本的文件](https://github.com/superRaytin/redux-saga-in-chinese)，感謝 @superRaytin（你也可以檢查引用的 redux-saga 版本）。
+# Translation
 
-
+- [Chinese](https://github.com/superRaytin/redux-saga-in-chinese)
+- [Chinese Traditional](https://github.com/neighborhood999/redux-saga)
 
 # 在瀏覽器使用 umd build 版本
 

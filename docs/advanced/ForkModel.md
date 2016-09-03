@@ -63,7 +63,7 @@ function* fetchAll() {
 
 事實上，被附加的 fork 與平行的 Effect 共享相同的語意：
 
-- 我們在平行的狀況下執行 task
+- 我們在 parallel 的狀況下執行 task
 - 在所有被發出的 task 終止之後，父 task 將會終止
 
 
@@ -71,7 +71,7 @@ function* fetchAll() {
 
 ## 錯誤傳播
 
-以此類推，讓我們在平行 Effect 中來研究如何處理錯誤。
+以此類推，讓我們在 parallel 的 Effect 中來研究如何處理錯誤。
 
 例如，我們有這個 Effect：
 
@@ -83,7 +83,7 @@ yield [
 ]
 ```
 
-如果三個子 Effect 其中一個失敗，會造成其他都失敗。此外，未捕獲的錯誤將造成平行 Effect 取消所有其他等待的 Effect。例如，如果 `call(fetchResource), 'users')` 發出一個未捕獲的錯誤，平行 Effect 將取消其他兩個 task（如果他們仍再等待），並從失敗的呼叫中，abort 本身具有相同的錯誤。
+如果三個子 Effect 其中一個失敗，會造成其他都失敗。此外，未捕獲的錯誤將造成 parallel 的 Effect 取消所有其他等待的 Effect。例如，如果 `call(fetchResource), 'users')` 發出一個未捕獲的錯誤，parallel 的 Effect 將取消其他兩個 task（如果他們仍再等待），並從失敗的呼叫中，abort 本身具有相同的錯誤。
 
 同樣為附加的 fork，一個 Saga abort 一個 Saga
 
@@ -118,13 +118,13 @@ function* main() {
 
 例如，如果在這個時候 `fetchAll` 被阻塞在 `call(delay, 1000)` Effect，並說明 `task1` 失敗了，整個 `fetchAll` task 將造成失敗。
 
-- 其他尚未完成的任務被取消。這些包含：  
+- 其他尚未完成的 task 被取消。這些包含：  
   - *main task* （`fetchAll` 的 body）: 取消意思是，取消目前的 Effect `call(delay, 1000)`  
   - 其他被 fork 的 task 仍然等待。例如在我們範例的 `task2`。
 
 - `call(fetchAll)` 本身發出一個錯誤的話，將會在 `main` 的 `catch` 捕獲錯誤。
 
-注意，因為我們使用阻塞呼叫，所以只能從 `main` 裡面的 `call(fetchAll)` 捕獲錯誤。我們並不能直接從 `fetchAll` 捕獲錯誤。這是一個經驗法則，**你不能從被 fork 的 task 捕獲錯誤**。一個被附加的 fork 失敗時，會造成父 fork 被 abort（就像沒有辦法在一個平行 Effect *內部*捕獲錯誤，只能透過外部阻塞平行的 Effect）。
+注意，因為我們使用阻塞呼叫，所以只能從 `main` 裡面的 `call(fetchAll)` 捕獲錯誤。我們並不能直接從 `fetchAll` 捕獲錯誤。這是一個經驗法則，**你不能從被 fork 的 task 捕獲錯誤**。一個被附加的 fork 失敗時，會造成父 fork 被 abort（就像沒有辦法在一個平行 Effect *內部*捕獲錯誤，只能透過外部阻塞 parallel 的 Effect）。
 
 
 ## 取消
