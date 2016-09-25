@@ -8,10 +8,13 @@
 
 ```javascript
 function* takeEvery(pattern, saga, ...args) {
-  while (true) {
-    const action = yield take(pattern)
-    yield fork(saga, ...args.concat(action))
-  }
+  const task = yield fork(function* () {
+    while (true) {
+      const action = yield take(pattern)
+      yield fork(saga, ...args.concat(action))
+    }
+  })
+  return task
 }
 ```
 
@@ -21,14 +24,17 @@ function* takeEvery(pattern, saga, ...args) {
 
 ```javascript
 function* takeLatest(pattern, saga, ...args) {
-  let lastTask
-  while (true) {
-    const action = yield take(pattern)
-    if (lastTask) {
-      yield cancel(lastTask) // 如果 task 已經被終止的話，cancel 是一個空的操作
+  const task = yield fork(function* () {
+    let lastTask
+    while (true) {
+      const action = yield take(pattern)
+      if (lastTask)
+        yield cancel(lastTask) // cancel is no-op if the task has already terminated
+
+      lastTask = yield fork(saga, ...args.concat(action))
     }
-    lastTask = yield fork(saga, ...args.concat(action))
-  }
+  })
+  return task
 }
 ```
 

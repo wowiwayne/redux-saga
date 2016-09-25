@@ -129,7 +129,7 @@ export function* incrementAsync() {
 
 // 我們觀察的 Saga：在每個 INCREMENT_ASYNC 產生一個新的 incrementAsync task
 export function* watchIncrementAsync() {
-  yield* takeEvery('INCREMENT_ASYNC', incrementAsync)
+  yield takeEvery('INCREMENT_ASYNC', incrementAsync)
 }
 ```
 

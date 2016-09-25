@@ -120,12 +120,12 @@ sagaMiddleware.run(mySaga)
 
 在 `dist/` 資料夾也有一個 `redux-saga` 的 **umd** build 可以使用。當使用 umd build 的 `redux-saga`，`ReduxSaga` 作為在 window 的全域變數。
 
-umd 版本在你不使用 Webpack 或 Browserify 相當的有用。你可以從 [npmcdn](npmcdn.com) 直接存取。
+umd 版本在你不使用 Webpack 或 Browserify 相當的有用。你可以從 [unpkg](unpkg.com) 直接存取。
 
 以下的 build 都是可用的：
 
-- [https://npmcdn.com/redux-saga/dist/redux-saga.js](https://npmcdn.com/redux-saga/dist/redux-saga.js)  
-- [https://npmcdn.com/redux-saga/dist/redux-saga.min.js](https://npmcdn.com/redux-saga/dist/redux-saga.min.js)
+- [https://unpkg.com/redux-saga/dist/redux-saga.js](https://unpkg.com/redux-saga/dist/redux-saga.js)  
+- [https://unpkg.com/redux-saga/dist/redux-saga.min.js](https://unpkg.com/redux-saga/dist/redux-saga.min.js)
 
 **重要！**如果你的目標瀏覽器不支援 *ES2015 generators*，你必須提供一個有效的 polyfill，像是 [`babel` 所提供的](https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.25/browser-polyfill.min.js)。polyfill 必須被 import 在 **redux-saga** 之前：
 

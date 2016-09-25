@@ -1,5 +1,6 @@
 export const sym = id => `@@redux-saga/${id}`
 export const TASK  = sym('TASK')
+export const HELPER  = sym('HELPER')
 export const MATCH = sym('MATCH')
 export const CANCEL = sym('cancelPromise')
 export const konst = v => () => v
@@ -24,11 +25,11 @@ export const is = {
   promise   : p => p && is.func(p.then),
   iterator  : it => it && is.func(it.next) && is.func(it.throw),
   task      : t => t && t[TASK],
-  take      : ch => ch && is.func(ch.take),
-  put       : ch => ch && is.func(ch.put),
   observable: ob => ob && is.func(ob.subscribe),
   buffer    : buf => buf && is.func(buf.isEmpty) && is.func(buf.take) && is.func(buf.put),
-  pattern   : pat => pat && ((typeof pat === 'string') || (typeof pat === 'symbol') || is.func(pat) || is.array(pat))
+  pattern   : pat => pat && ((typeof pat === 'string') || (typeof pat === 'symbol') || is.func(pat) || is.array(pat)),
+  channel   : ch => ch && is.func(ch.take) && is.func(ch.close),
+  helper    : it => it && it[HELPER]
 }
 
 export function remove(array, item) {
@@ -89,8 +90,12 @@ export function autoInc(seed = 0) {
 
 const kThrow = err => { throw err }
 const kReturn = value => ({value, done: true})
-export function makeIterator(next, thro = kThrow, name = '') {
+export function makeIterator(next, thro = kThrow, name = '', isHelper) {
   const iterator = {name, next, throw: thro, return: kReturn}
+
+  if (isHelper) {
+    iterator[HELPER] = true
+  }
   if(typeof Symbol !== 'undefined') {
     iterator[Symbol.iterator] = () => iterator
   }
@@ -107,12 +112,12 @@ export function log(level, message, error) {
   if(typeof window === 'undefined') {
     console.log(`redux-saga ${level}: ${message}\n${(error && error.stack) || error}`)
   } else {
-    console[level].call(console, message, error)
+    console[level](message, error)
   }
 }
 
 export const internalErr = err => new Error(`
-  redux-saga: Error checking hooks detected an inconsisten state. This is likely a bug
+  redux-saga: Error checking hooks detected an inconsistent state. This is likely a bug
   in redux-saga code and not yours. Thanks for reporting this in the project's github repo.
   Error: ${err}
 `)

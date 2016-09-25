@@ -59,7 +59,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	exports.utils = exports.effects = exports.CANCEL = exports.delay = exports.takeLatest = exports.takeEvery = exports.buffers = exports.channel = exports.eventChannel = exports.END = exports.runSaga = undefined;
+	exports.utils = exports.effects = exports.CANCEL = exports.delay = exports.throttle = exports.takeLatest = exports.takeEvery = exports.buffers = exports.channel = exports.eventChannel = exports.END = exports.runSaga = undefined;
 
 	var _runSaga = __webpack_require__(9);
 
@@ -70,7 +70,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _channel = __webpack_require__(2);
+	var _channel = __webpack_require__(3);
 
 	Object.defineProperty(exports, 'END', {
 	  enumerable: true,
@@ -91,7 +91,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _buffers = __webpack_require__(4);
+	var _buffers = __webpack_require__(2);
 
 	Object.defineProperty(exports, 'buffers', {
 	  enumerable: true,
@@ -112,6 +112,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	  enumerable: true,
 	  get: function get() {
 	    return _sagaHelpers.takeLatest;
+	  }
+	});
+	Object.defineProperty(exports, 'throttle', {
+	  enumerable: true,
+	  get: function get() {
+	    return _sagaHelpers.throttle;
 	  }
 	});
 
@@ -180,6 +186,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  return '@@redux-saga/' + id;
 	};
 	var TASK = exports.TASK = sym('TASK');
+	var HELPER = exports.HELPER = sym('HELPER');
 	var MATCH = exports.MATCH = sym('MATCH');
 	var CANCEL = exports.CANCEL = sym('cancelPromise');
 	var konst = exports.konst = function konst(v) {
@@ -224,12 +231,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	  task: function task(t) {
 	    return t && t[TASK];
 	  },
-	  take: function take(ch) {
-	    return ch && is.func(ch.take);
-	  },
-	  put: function put(ch) {
-	    return ch && is.func(ch.put);
-	  },
 	  observable: function observable(ob) {
 	    return ob && is.func(ob.subscribe);
 	  },
@@ -238,6 +239,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	  },
 	  pattern: function pattern(pat) {
 	    return pat && (typeof pat === 'string' || (typeof pat === 'undefined' ? 'undefined' : _typeof(pat)) === 'symbol' || is.func(pat) || is.array(pat));
+	  },
+	  channel: function channel(ch) {
+	    return ch && is.func(ch.take) && is.func(ch.close);
+	  },
+	  helper: function helper(it) {
+	    return it && it[HELPER];
 	  }
 	};
 
@@ -324,8 +331,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	function makeIterator(next) {
 	  var thro = arguments.length <= 1 || arguments[1] === undefined ? kThrow : arguments[1];
 	  var name = arguments.length <= 2 || arguments[2] === undefined ? '' : arguments[2];
+	  var isHelper = arguments[3];
 
 	  var iterator = { name: name, next: next, throw: thro, return: kReturn };
+
+	  if (isHelper) {
+	    iterator[HELPER] = true;
+	  }
 	  if (typeof Symbol !== 'undefined') {
 	    iterator[Symbol.iterator] = function () {
 	      return iterator;
@@ -344,12 +356,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	  if (typeof window === 'undefined') {
 	    console.log('redux-saga ' + level + ': ' + message + '\n' + (error && error.stack || error));
 	  } else {
-	    console[level].call(console, message, error);
+	    console[level](message, error);
 	  }
 	}
 
 	var internalErr = exports.internalErr = function internalErr(err) {
-	  return new Error('\n  redux-saga: Error checking hooks detected an inconsisten state. This is likely a bug\n  in redux-saga code and not yours. Thanks for reporting this in the project\'s github repo.\n  Error: ' + err + '\n');
+	  return new Error('\n  redux-saga: Error checking hooks detected an inconsistent state. This is likely a bug\n  in redux-saga code and not yours. Thanks for reporting this in the project\'s github repo.\n  Error: ' + err + '\n');
 	};
 
 /***/ },
@@ -361,14 +373,107 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	exports.UNDEFINED_INPUT_ERROR = exports.INVALID_BUFFER = exports.isEnd = exports.END = undefined;
-	exports.emitter = emitter;
-	exports.channel = channel;
-	exports.eventChannel = eventChannel;
+	exports.buffers = exports.BUFFER_OVERFLOW = undefined;
 
 	var _utils = __webpack_require__(1);
 
-	var _buffers = __webpack_require__(4);
+	var BUFFER_OVERFLOW = exports.BUFFER_OVERFLOW = 'Channel\'s Buffer overflow!';
+
+	var ON_OVERFLOW_THROW = 1;
+	var ON_OVERFLOW_DROP = 2;
+	var ON_OVERFLOW_SLIDE = 3;
+
+	var zeroBuffer = { isEmpty: _utils.kTrue, put: _utils.noop, take: _utils.noop };
+
+	function ringBuffer() {
+	  var limit = arguments.length <= 0 || arguments[0] === undefined ? 10 : arguments[0];
+	  var overflowAction = arguments[1];
+
+	  var arr = new Array(limit);
+	  var length = 0;
+	  var pushIndex = 0;
+	  var popIndex = 0;
+	  return {
+	    isEmpty: function isEmpty() {
+	      return length == 0;
+	    },
+	    put: function put(it) {
+	      if (length < limit) {
+	        arr[pushIndex] = it;
+	        pushIndex = (pushIndex + 1) % limit;
+	        length++;
+	      } else {
+	        switch (overflowAction) {
+	          case ON_OVERFLOW_THROW:
+	            throw new Error(BUFFER_OVERFLOW);
+	          case ON_OVERFLOW_SLIDE:
+	            arr[pushIndex] = it;
+	            pushIndex = (pushIndex + 1) % limit;
+	            popIndex = pushIndex;
+	            break;
+	          default:
+	          // DROP
+	        }
+	      }
+	    },
+	    take: function take() {
+	      if (length != 0) {
+	        var it = arr[popIndex];
+	        arr[popIndex] = null;
+	        length--;
+	        popIndex = (popIndex + 1) % limit;
+	        return it;
+	      }
+	    },
+	    flush: function flush() {
+	      var flushedItems = [];
+	      for (var i = 0, len = length; i < len; i++) {
+	        flushedItems.push(arr[popIndex]);
+	        arr[popIndex] = null;
+	        length--;
+	        popIndex = (popIndex + 1) % limit;
+	      }
+	      return flushedItems;
+	    }
+	  };
+	}
+
+	var buffers = exports.buffers = {
+	  none: function none() {
+	    return zeroBuffer;
+	  },
+	  fixed: function fixed(limit) {
+	    return ringBuffer(limit, ON_OVERFLOW_THROW);
+	  },
+	  dropping: function dropping(limit) {
+	    return ringBuffer(limit, ON_OVERFLOW_DROP);
+	  },
+	  sliding: function sliding(limit) {
+	    return ringBuffer(limit, ON_OVERFLOW_SLIDE);
+	  }
+	};
+
+/***/ },
+/* 3 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	  value: true
+	});
+	exports.UNDEFINED_INPUT_ERROR = exports.INVALID_BUFFER = exports.isEnd = exports.END = undefined;
+
+	var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+	exports.emitter = emitter;
+	exports.channel = channel;
+	exports.eventChannel = eventChannel;
+	exports.stdChannel = stdChannel;
+
+	var _utils = __webpack_require__(1);
+
+	var _buffers = __webpack_require__(2);
 
 	var CHANNEL_END_TYPE = '@@redux-saga/CHANNEL_END';
 	var END = exports.END = { type: CHANNEL_END_TYPE };
@@ -406,15 +511,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	  exports.UNDEFINED_INPUT_ERROR = UNDEFINED_INPUT_ERROR += '\nHints:\n    - check that your Action Creator returns a non-undefined value\n    - if the Saga was started using runSaga, check that your subscribe source provides the action to its listeners\n  ';
 	}
 
-	function channel(buffer) {
+	function channel() {
+	  var buffer = arguments.length <= 0 || arguments[0] === undefined ? _buffers.buffers.fixed() : arguments[0];
+
 	  var closed = false;
 	  var takers = [];
 
-	  if (arguments.length > 0) {
-	    (0, _utils.check)(buffer, _utils.is.buffer, INVALID_BUFFER);
-	  } else {
-	    buffer = _buffers.buffers.fixed();
-	  }
+	  (0, _utils.check)(buffer, _utils.is.buffer, INVALID_BUFFER);
 
 	  function checkForbiddenStates() {
 	    if (closed && takers.length) {
@@ -428,28 +531,25 @@ return /******/ (function(modules) { // webpackBootstrap
 	  function put(input) {
 	    checkForbiddenStates();
 	    (0, _utils.check)(input, _utils.is.notUndef, UNDEFINED_INPUT_ERROR);
-	    if (!closed) {
-	      if (takers.length) {
-	        for (var i = 0; i < takers.length; i++) {
-	          var cb = takers[i];
-	          if (!cb[_utils.MATCH] || cb[_utils.MATCH](input)) {
-	            takers.splice(i, 1);
-	            return cb(input);
-	          }
-	        }
-	      } else {
-	        buffer.put(input);
+	    if (closed) {
+	      return;
+	    }
+	    if (!takers.length) {
+	      return buffer.put(input);
+	    }
+	    for (var i = 0; i < takers.length; i++) {
+	      var cb = takers[i];
+	      if (!cb[_utils.MATCH] || cb[_utils.MATCH](input)) {
+	        takers.splice(i, 1);
+	        return cb(input);
 	      }
 	    }
 	  }
 
-	  function take(cb, matcher) {
+	  function take(cb) {
 	    checkForbiddenStates();
 	    (0, _utils.check)(cb, _utils.is.func, 'channel.take\'s callback must be a function');
-	    if (arguments.length > 1) {
-	      (0, _utils.check)(matcher, _utils.is.func, 'channel.take\'s matcher argument must be a function');
-	      cb[_utils.MATCH] = matcher;
-	    }
+
 	    if (closed && buffer.isEmpty()) {
 	      cb(END);
 	    } else if (!buffer.isEmpty()) {
@@ -462,6 +562,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	  }
 
+	  function flush(cb) {
+	    checkForbiddenStates(); // TODO: check if some new state should be forbidden now
+	    (0, _utils.check)(cb, _utils.is.func, 'channel.flush\' callback must be a function');
+	    if (closed && buffer.isEmpty()) {
+	      cb(END);
+	      return;
+	    }
+	    cb(buffer.flush());
+	  }
+
 	  function close() {
 	    checkForbiddenStates();
 	    if (!closed) {
@@ -472,12 +582,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	        for (var i = 0, len = arr.length; i < len; i++) {
 	          arr[i](END);
 	        }
-	        takers = [];
 	      }
 	    }
 	  }
 
-	  return { take: take, put: put, close: close,
+	  return { take: take, put: put, flush: flush, close: close,
 	    get __takers__() {
 	      return takers;
 	    },
@@ -514,6 +623,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  return {
 	    take: chan.take,
+	    flush: chan.flush,
 	    close: function close() {
 	      if (!chan.__closed__) {
 	        chan.close();
@@ -523,8 +633,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	  };
 	}
 
+	function stdChannel(subscribe) {
+	  var chan = eventChannel(subscribe);
+
+	  return _extends({}, chan, {
+	    take: function take(cb, matcher) {
+	      if (arguments.length > 1) {
+	        (0, _utils.check)(matcher, _utils.is.func, 'channel.take\'s matcher argument must be a function');
+	        cb[_utils.MATCH] = matcher;
+	      }
+	      chan.take(cb);
+	    }
+	  });
+	}
+
 /***/ },
-/* 3 */
+/* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -550,6 +674,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.select = select;
 	exports.actionChannel = actionChannel;
 	exports.cancelled = cancelled;
+	exports.flush = flush;
 
 	var _utils = __webpack_require__(1);
 
@@ -567,6 +692,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	var SELECT = 'SELECT';
 	var ACTION_CHANNEL = 'ACTION_CHANNEL';
 	var CANCELLED = 'CANCELLED';
+	var FLUSH = 'FLUSH';
 
 	var effect = function effect(type, payload) {
 	  var _ref;
@@ -574,29 +700,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	  return _ref = {}, _defineProperty(_ref, IO, true), _defineProperty(_ref, type, payload), _ref;
 	};
 
-	function take(channel, pattern) {
-	  if (arguments.length >= 2) {
-	    (0, _utils.check)(channel, _utils.is.notUndef, 'take(channel, pattern): channel is undefined');
-	    (0, _utils.check)(channel, _utils.is.take, 'take(channel, pattern): argument ' + String(channel) + ' is not a valid channel (channel argument must have a take method)');
-	    (0, _utils.check)(pattern, _utils.is.notUndef, 'take(channel, pattern): pattern is undefined');
-	    (0, _utils.check)(pattern, _utils.is.pattern, 'take(channel, pattern): argument ' + String(pattern) + ' is not a valid pattern (pattern must be String | Function: a => boolean | Array<String>)');
-	  } else if (arguments.length === 1) {
-	    (0, _utils.check)(channel, _utils.is.notUndef, 'take(patternOrChannel): undefined argument');
-	    if (!_utils.is.take(channel)) {
-	      if (_utils.is.pattern(channel)) {
-	        pattern = channel;
-	        channel = null;
-	      } else {
-	        throw new Error('take(patternOrChannel): argument ' + String(channel) + ' is not valid channel or a valid pattern');
-	      }
-	    } else {
-	      pattern = '*';
-	    }
-	  } else {
-	    pattern = '*';
-	  }
+	function take() {
+	  var patternOrChannel = arguments.length <= 0 || arguments[0] === undefined ? '*' : arguments[0];
 
-	  return effect(TAKE, { channel: channel, pattern: pattern });
+	  if (arguments.length) {
+	    (0, _utils.check)(patternOrChannel, _utils.is.notUndef, 'take(patternOrChannel): patternOrChannel is undefined');
+	  }
+	  if (_utils.is.pattern(patternOrChannel)) {
+	    return effect(TAKE, { pattern: patternOrChannel });
+	  }
+	  if (_utils.is.channel(patternOrChannel)) {
+	    return effect(TAKE, { channel: patternOrChannel });
+	  }
+	  throw new Error('take(patternOrChannel): argument ' + String(patternOrChannel) + ' is not valid channel or a valid pattern');
 	}
 
 	function takem() {
@@ -608,7 +724,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	function put(channel, action) {
 	  if (arguments.length > 1) {
 	    (0, _utils.check)(channel, _utils.is.notUndef, 'put(channel, action): argument channel is undefined');
-	    (0, _utils.check)(channel, _utils.is.put, 'put(channel, action): argument ' + channel + ' is not a valid channel (channel argument must have a put method)');
+	    (0, _utils.check)(channel, _utils.is.channel, 'put(channel, action): argument ' + channel + ' is not a valid channel');
 	    (0, _utils.check)(action, _utils.is.notUndef, 'put(channel, action): argument action is undefined');
 	  } else {
 	    (0, _utils.check)(channel, _utils.is.notUndef, 'put(action): argument action is undefined');
@@ -719,7 +835,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  if (arguments.length === 0) {
 	    selector = _utils.ident;
 	  } else {
-	    (0, _utils.check)(select, _utils.is.notUndef, 'select(selector,[...]): argument selector is undefined');
+	    (0, _utils.check)(selector, _utils.is.notUndef, 'select(selector,[...]): argument selector is undefined');
 	    (0, _utils.check)(selector, _utils.is.func, 'select(selector,[...]): argument ' + selector + ' is not a function');
 	  }
 	  return effect(SELECT, { selector: selector, args: args });
@@ -739,6 +855,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	function cancelled() {
 	  return effect(CANCELLED, {});
+	}
+
+	function flush(channel) {
+	  (0, _utils.check)(channel, _utils.is.channel, 'flush(channel): argument ' + channel + ' is not valid channel');
+	  return effect(FLUSH, channel);
 	}
 
 	var asEffect = exports.asEffect = {
@@ -774,85 +895,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	  },
 	  cancelled: function cancelled(effect) {
 	    return effect && effect[IO] && effect[CANCELLED];
-	  }
-	};
-
-/***/ },
-/* 4 */
-/***/ function(module, exports, __webpack_require__) {
-
-	'use strict';
-
-	Object.defineProperty(exports, "__esModule", {
-	  value: true
-	});
-	exports.buffers = exports.BUFFER_OVERFLOW = undefined;
-
-	var _utils = __webpack_require__(1);
-
-	var BUFFER_OVERFLOW = exports.BUFFER_OVERFLOW = 'Channel\'s Buffer overflow!';
-
-	var ON_OVERFLOW_THROW = 1;
-	var ON_OVERFLOW_DROP = 2;
-	var ON_OVERFLOW_SLIDE = 3;
-
-	var zeroBuffer = { isEmpty: _utils.kTrue, put: _utils.noop, take: _utils.noop };
-
-	function ringBuffer() {
-	  var limit = arguments.length <= 0 || arguments[0] === undefined ? 10 : arguments[0];
-	  var overflowAction = arguments[1];
-
-	  var arr = new Array(limit);
-	  var length = 0;
-	  var pushIndex = 0;
-	  var popIndex = 0;
-	  return {
-	    isEmpty: function isEmpty() {
-	      return length == 0;
-	    },
-	    put: function put(it) {
-	      if (length < limit) {
-	        arr[pushIndex] = it;
-	        pushIndex = (pushIndex + 1) % limit;
-	        length++;
-	      } else {
-	        switch (overflowAction) {
-	          case ON_OVERFLOW_THROW:
-	            throw new Error(BUFFER_OVERFLOW);
-	          case ON_OVERFLOW_SLIDE:
-	            arr[pushIndex] = it;
-	            pushIndex = (pushIndex + 1) % limit;
-	            popIndex = pushIndex;
-	            break;
-	          default:
-	          // DROP
-	        }
-	      }
-	    },
-	    take: function take() {
-	      if (length != 0) {
-	        var it = arr[popIndex];
-	        arr[popIndex] = null;
-	        length--;
-	        popIndex = (popIndex + 1) % limit;
-	        return it;
-	      }
-	    }
-	  };
-	}
-
-	var buffers = exports.buffers = {
-	  none: function none() {
-	    return zeroBuffer;
 	  },
-	  fixed: function fixed(limit) {
-	    return ringBuffer(limit, ON_OVERFLOW_THROW);
-	  },
-	  dropping: function dropping(limit) {
-	    return ringBuffer(limit, ON_OVERFLOW_DROP);
-	  },
-	  sliding: function sliding(limit) {
-	    return ringBuffer(limit, ON_OVERFLOW_SLIDE);
+	  flush: function flush(effect) {
+	    return effect && effect[IO] && effect[FLUSH];
 	  }
 	};
 
@@ -874,11 +919,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var _asap2 = _interopRequireDefault(_asap);
 
-	var _io = __webpack_require__(3);
+	var _io = __webpack_require__(4);
 
-	var _channel = __webpack_require__(2);
+	var _channel = __webpack_require__(3);
 
-	var _buffers = __webpack_require__(4);
+	var _buffers = __webpack_require__(2);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -1008,6 +1053,56 @@ return /******/ (function(modules) { // webpackBootstrap
 	  };
 	}
 
+	function createTaskIterator(_ref) {
+	  var context = _ref.context;
+	  var fn = _ref.fn;
+	  var args = _ref.args;
+
+	  if (_utils.is.iterator(fn)) {
+	    return fn;
+	  }
+
+	  // catch synchronous failures; see #152 and #441
+	  var result = void 0,
+	      error = void 0;
+	  try {
+	    result = fn.apply(context, args);
+	  } catch (err) {
+	    error = err;
+	  }
+
+	  // i.e. a generator function returns an iterator
+	  if (_utils.is.iterator(result)) {
+	    return result;
+	  }
+
+	  // do not bubble up synchronous failures for detached forks
+	  // instead create a failed task. See #152 and #441
+	  return error ? (0, _utils.makeIterator)(function () {
+	    throw error;
+	  }) : (0, _utils.makeIterator)(function () {
+	    var pc = void 0;
+	    var eff = { done: false, value: result };
+	    var ret = function ret(value) {
+	      return { done: true, value: value };
+	    };
+	    return function (arg) {
+	      if (!pc) {
+	        pc = true;
+	        return eff;
+	      } else {
+	        return ret(arg);
+	      }
+	    };
+	  }());
+	}
+
+	function wrapHelper(helper) {
+	  return {
+	    fn: helper
+	  };
+	}
+
 	function proc(iterator) {
 	  var subscribe = arguments.length <= 1 || arguments[1] === undefined ? function () {
 	    return _utils.noop;
@@ -1023,9 +1118,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  var sagaMonitor = options.sagaMonitor;
 	  var logger = options.logger;
+	  var onError = options.onError;
 
 	  var log = logger || _utils.log;
-	  var stdChannel = (0, _channel.eventChannel)(subscribe);
+	  var stdChannel = (0, _channel.stdChannel)(subscribe);
 	  /**
 	    Tracks the current effect cancellation
 	    Each time the generator progresses. calling runEffect will set a new value
@@ -1054,9 +1150,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	  /**
 	    This may be called by a parent generator to trigger/propagate cancellation
 	    cancel all pending tasks (including the main task), then end the current task.
-	      Cancellation propagates down to the whole execution tree holded by this Parent task
+	     Cancellation propagates down to the whole execution tree holded by this Parent task
 	    It's also propagated to all joiners of this task and their execution tree/joiners
-	      Cancellation is noop for terminated/Cancelled tasks tasks
+	     Cancellation is noop for terminated/Cancelled tasks tasks
 	  **/
 	  function cancel() {
 	    /**
@@ -1106,7 +1202,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        /**
 	          getting TASK_CANCEL autoamtically cancels the main task
 	          We can get this value here
-	            - By cancelling the parent task manually
+	           - By cancelling the parent task manually
 	          - By joining a Cancelled task
 	        **/
 	        mainTask.isCancelled = true;
@@ -1159,6 +1255,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 	      if (!task.cont) {
 	        log('error', 'uncaught', result.sagaStack || result.stack);
+	        if (result instanceof Error && onError) {
+	          onError(result);
+	        }
 	      }
 	      iterator._error = result;
 	      iterator._isAborted = true;
@@ -1228,22 +1327,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	    /**
 	      each effect runner must attach its own logic of cancellation to the provided callback
 	      it allows this generator to propagate cancellation downward.
-	        ATTENTION! effect runners must setup the cancel logic by setting cb.cancel = [cancelMethod]
+	       ATTENTION! effect runners must setup the cancel logic by setting cb.cancel = [cancelMethod]
 	      And the setup must occur before calling the callback
-	        This is a sort of inversion of control: called async functions are responsible
+	       This is a sort of inversion of control: called async functions are responsible
 	      of completing the flow by calling the provided continuation; while caller functions
 	      are responsible for aborting the current flow by calling the attached cancel function
-	        Library users can attach their own cancellation logic to promises by defining a
+	       Library users can attach their own cancellation logic to promises by defining a
 	      promise[CANCEL] method in their returned promises
 	      ATTENTION! calling cancel must have no effect on an already completed or cancelled effect
 	    **/
 	    var data = void 0;
 	    return (
 	      // Non declarative effect
-	      _utils.is.promise(effect) ? resolvePromise(effect, currCb) : _utils.is.iterator(effect) ? resolveIterator(effect, effectId, name, currCb)
+	      _utils.is.promise(effect) ? resolvePromise(effect, currCb) : _utils.is.helper(effect) ? runForkEffect(wrapHelper(effect), effectId, currCb) : _utils.is.iterator(effect) ? resolveIterator(effect, effectId, name, currCb)
 
 	      // declarative effects
-	      : _utils.is.array(effect) ? runParallelEffect(effect, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.take(effect)) ? runTakeEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.put(effect)) ? runPutEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.race(effect)) ? runRaceEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.call(effect)) ? runCallEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.cps(effect)) ? runCPSEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.fork(effect)) ? runForkEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.join(effect)) ? runJoinEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.cancel(effect)) ? runCancelEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.select(effect)) ? runSelectEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.actionChannel(effect)) ? runChannelEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.cancelled(effect)) ? runCancelledEffect(data, currCb) : /* anything else returned as is        */currCb(effect)
+	      : _utils.is.array(effect) ? runParallelEffect(effect, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.take(effect)) ? runTakeEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.put(effect)) ? runPutEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.race(effect)) ? runRaceEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.call(effect)) ? runCallEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.cps(effect)) ? runCPSEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.fork(effect)) ? runForkEffect(data, effectId, currCb) : _utils.is.notUndef(data = _io.asEffect.join(effect)) ? runJoinEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.cancel(effect)) ? runCancelEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.select(effect)) ? runSelectEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.actionChannel(effect)) ? runChannelEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.flush(effect)) ? runFlushEffect(data, currCb) : _utils.is.notUndef(data = _io.asEffect.cancelled(effect)) ? runCancelledEffect(data, currCb) : /* anything else returned as is        */currCb(effect)
 	    );
 	  }
 
@@ -1261,10 +1360,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	    proc(iterator, subscribe, dispatch, getState, options, effectId, name, cb);
 	  }
 
-	  function runTakeEffect(_ref, cb) {
-	    var channel = _ref.channel;
-	    var pattern = _ref.pattern;
-	    var maybe = _ref.maybe;
+	  function runTakeEffect(_ref2, cb) {
+	    var channel = _ref2.channel;
+	    var pattern = _ref2.pattern;
+	    var maybe = _ref2.maybe;
 
 	    channel = channel || stdChannel;
 	    var takeCb = function takeCb(inp) {
@@ -1278,10 +1377,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	    cb.cancel = takeCb.cancel;
 	  }
 
-	  function runPutEffect(_ref2, cb) {
-	    var channel = _ref2.channel;
-	    var action = _ref2.action;
-	    var sync = _ref2.sync;
+	  function runPutEffect(_ref3, cb) {
+	    var channel = _ref3.channel;
+	    var action = _ref3.action;
+	    var sync = _ref3.sync;
 
 	    /*
 	      Use a reentrant lock `asap` to flatten all nested dispatches
@@ -1306,10 +1405,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	    // Put effects are non cancellables
 	  }
 
-	  function runCallEffect(_ref3, effectId, cb) {
-	    var context = _ref3.context;
-	    var fn = _ref3.fn;
-	    var args = _ref3.args;
+	  function runCallEffect(_ref4, effectId, cb) {
+	    var context = _ref4.context;
+	    var fn = _ref4.fn;
+	    var args = _ref4.args;
 
 	    var result = void 0;
 	    // catch synchronous failures; see #152
@@ -1321,10 +1420,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	    return _utils.is.promise(result) ? resolvePromise(result, cb) : _utils.is.iterator(result) ? resolveIterator(result, effectId, fn.name, cb) : cb(result);
 	  }
 
-	  function runCPSEffect(_ref4, cb) {
-	    var context = _ref4.context;
-	    var fn = _ref4.fn;
-	    var args = _ref4.args;
+	  function runCPSEffect(_ref5, cb) {
+	    var context = _ref5.context;
+	    var fn = _ref5.fn;
+	    var args = _ref5.args;
 
 	    // CPS (ie node style functions) can define their own cancellation logic
 	    // by setting cancel field on the cb
@@ -1339,63 +1438,25 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	  }
 
-	  function runForkEffect(_ref5, effectId, cb) {
-	    var context = _ref5.context;
-	    var fn = _ref5.fn;
-	    var args = _ref5.args;
-	    var detached = _ref5.detached;
+	  function runForkEffect(_ref6, effectId, cb) {
+	    var context = _ref6.context;
+	    var fn = _ref6.fn;
+	    var args = _ref6.args;
+	    var detached = _ref6.detached;
 
-	    var result = void 0,
-	        error = void 0,
-	        _iterator = void 0;
-
-	    // we run the function, next we'll check if this is a generator function
-	    // (generator is a function that returns an iterator)
-
-	    // catch synchronous failures; see #152 and #441
-	    try {
-	      result = fn.apply(context, args);
-	    } catch (err) {
-	      error = err;
-	    }
-
-	    // A generator function: i.e. returns an iterator
-	    if (_utils.is.iterator(result)) {
-	      _iterator = result;
-	    }
-
-	    // do not bubble up synchronous failures for detached forks
-	    // instead create a failed task. See #152 and #441
-	    else {
-	        _iterator = error ? (0, _utils.makeIterator)(function () {
-	          throw error;
-	        }) : (0, _utils.makeIterator)(function () {
-	          var pc = void 0;
-	          var eff = { done: false, value: result };
-	          var ret = function ret(value) {
-	            return { done: true, value: value };
-	          };
-	          return function (arg) {
-	            if (!pc) {
-	              pc = true;
-	              return eff;
-	            } else {
-	              return ret(arg);
-	            }
-	          };
-	        }());
-	      }
+	    var taskIterator = createTaskIterator({ context: context, fn: fn, args: args });
 
 	    _asap2.default.suspend();
-	    var task = proc(_iterator, subscribe, dispatch, getState, options, effectId, fn.name, detached ? null : _utils.noop);
+	    var task = proc(taskIterator, subscribe, dispatch, getState, options, effectId, fn.name, detached ? null : _utils.noop);
+
 	    if (detached) {
 	      cb(task);
 	    } else {
-	      if (_iterator._isRunning) {
+	      if (taskIterator._isRunning) {
 	        taskQueue.addTask(task);
 	        cb(task);
-	      } else if (_iterator._error) {
-	        taskQueue.abort(_iterator._error);
+	      } else if (taskIterator._error) {
+	        taskQueue.abort(taskIterator._error);
 	      } else {
 	        cb(task);
 	      }
@@ -1513,9 +1574,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	    });
 	  }
 
-	  function runSelectEffect(_ref6, cb) {
-	    var selector = _ref6.selector;
-	    var args = _ref6.args;
+	  function runSelectEffect(_ref7, cb) {
+	    var selector = _ref7.selector;
+	    var args = _ref7.args;
 
 	    try {
 	      var state = selector.apply(undefined, [getState()].concat(_toConsumableArray(args)));
@@ -1525,9 +1586,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	  }
 
-	  function runChannelEffect(_ref7, cb) {
-	    var pattern = _ref7.pattern;
-	    var buffer = _ref7.buffer;
+	  function runChannelEffect(_ref8, cb) {
+	    var pattern = _ref8.pattern;
+	    var buffer = _ref8.buffer;
 
 	    var match = matcher(pattern);
 	    match.pattern = pattern;
@@ -1538,11 +1599,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	    cb(!!mainTask.isCancelled);
 	  }
 
+	  function runFlushEffect(channel, cb) {
+	    channel.flush(cb);
+	  }
+
 	  function newTask(id, name, iterator, cont) {
-	    var _done, _ref8, _mutatorMap;
+	    var _done, _ref9, _mutatorMap;
 
 	    iterator._deferredEnd = null;
-	    return _ref8 = {}, _defineProperty(_ref8, _utils.TASK, true), _defineProperty(_ref8, 'id', id), _defineProperty(_ref8, 'name', name), _done = 'done', _mutatorMap = {}, _mutatorMap[_done] = _mutatorMap[_done] || {}, _mutatorMap[_done].get = function () {
+	    return _ref9 = {}, _defineProperty(_ref9, _utils.TASK, true), _defineProperty(_ref9, 'id', id), _defineProperty(_ref9, 'name', name), _done = 'done', _mutatorMap = {}, _mutatorMap[_done] = _mutatorMap[_done] || {}, _mutatorMap[_done].get = function () {
 	      if (iterator._deferredEnd) {
 	        return iterator._deferredEnd.promise;
 	      } else {
@@ -1553,17 +1618,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	        return def.promise;
 	      }
-	    }, _defineProperty(_ref8, 'cont', cont), _defineProperty(_ref8, 'joiners', []), _defineProperty(_ref8, 'cancel', cancel), _defineProperty(_ref8, 'isRunning', function isRunning() {
+	    }, _defineProperty(_ref9, 'cont', cont), _defineProperty(_ref9, 'joiners', []), _defineProperty(_ref9, 'cancel', cancel), _defineProperty(_ref9, 'isRunning', function isRunning() {
 	      return iterator._isRunning;
-	    }), _defineProperty(_ref8, 'isCancelled', function isCancelled() {
+	    }), _defineProperty(_ref9, 'isCancelled', function isCancelled() {
 	      return iterator._isCancelled;
-	    }), _defineProperty(_ref8, 'isAborted', function isAborted() {
+	    }), _defineProperty(_ref9, 'isAborted', function isAborted() {
 	      return iterator._isAborted;
-	    }), _defineProperty(_ref8, 'result', function result() {
+	    }), _defineProperty(_ref9, 'result', function result() {
 	      return iterator._result;
-	    }), _defineProperty(_ref8, 'error', function error() {
+	    }), _defineProperty(_ref9, 'error', function error() {
 	      return iterator._error;
-	    }), _defineEnumerableProperties(_ref8, _mutatorMap), _ref8;
+	    }), _defineEnumerableProperties(_ref9, _mutatorMap), _ref9;
 	  }
 	}
 
@@ -1577,7 +1642,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  value: true
 	});
 
-	var _io = __webpack_require__(3);
+	var _io = __webpack_require__(4);
 
 	Object.defineProperty(exports, 'take', {
 	  enumerable: true,
@@ -1663,6 +1728,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	    return _io.cancelled;
 	  }
 	});
+	Object.defineProperty(exports, 'flush', {
+	  enumerable: true,
+	  get: function get() {
+	    return _io.flush;
+	  }
+	});
 
 /***/ },
 /* 7 */
@@ -1715,7 +1786,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var _proc2 = _interopRequireDefault(_proc);
 
-	var _channel = __webpack_require__(2);
+	var _channel = __webpack_require__(3);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -1734,6 +1805,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  if (options.logger && !_utils.is.func(options.logger)) {
 	    throw new Error('`options.logger` passed to the Saga middleware is not a function!');
+	  }
+
+	  if (options.onerror && !_utils.is.func(options.onerror)) {
+	    throw new Error('`options.onerror` passed to the Saga middleware is not a function!');
 	  }
 
 	  function sagaMiddleware(_ref) {
@@ -1819,12 +1894,15 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	exports.takeEvery = takeEvery;
 	exports.takeLatest = takeLatest;
+	exports.throttle = throttle;
 
-	var _channel = __webpack_require__(2);
+	var _channel = __webpack_require__(3);
 
 	var _utils = __webpack_require__(1);
 
-	var _io = __webpack_require__(3);
+	var _io = __webpack_require__(4);
+
+	var _buffers = __webpack_require__(2);
 
 	var done = { done: true, value: undefined };
 	var qEnd = {};
@@ -1862,7 +1940,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  return (0, _utils.makeIterator)(next, function (error) {
 	    return next(null, error);
-	  }, name);
+	  }, name, true);
 	}
 
 	function safeName(pattern) {
@@ -1935,6 +2013,46 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }, 'q1', 'takeLatest(' + safeName(pattern) + ', ' + worker.name + ')');
 	}
 
+	function throttle(delayLength, pattern, worker) {
+	  for (var _len3 = arguments.length, args = Array(_len3 > 3 ? _len3 - 3 : 0), _key3 = 3; _key3 < _len3; _key3++) {
+	    args[_key3 - 3] = arguments[_key3];
+	  }
+
+	  var action = void 0,
+	      channel = void 0;
+
+	  var yActionChannel = { done: false, value: (0, _io.actionChannel)(pattern, _buffers.buffers.sliding(1)) };
+	  var yTake = function yTake() {
+	    return { done: false, value: (0, _io.take)(channel, pattern) };
+	  };
+	  var yFork = function yFork(ac) {
+	    return { done: false, value: _io.fork.apply(undefined, [worker].concat(args, [ac])) };
+	  };
+	  var yDelay = { done: false, value: (0, _io.call)(_utils.delay, delayLength) };
+
+	  var setAction = function setAction(ac) {
+	    return action = ac;
+	  };
+	  var setChannel = function setChannel(ch) {
+	    return channel = ch;
+	  };
+
+	  return fsmIterator({
+	    q1: function q1() {
+	      return ['q2', yActionChannel, setChannel];
+	    },
+	    q2: function q2() {
+	      return ['q3', yTake(), setAction];
+	    },
+	    q3: function q3() {
+	      return action === _channel.END ? [qEnd] : ['q4', yFork(action)];
+	    },
+	    q4: function q4() {
+	      return ['q2', yDelay];
+	    }
+	  }, 'q1', 'throttle(' + safeName(pattern) + ', ' + worker.name + ')');
+	}
+
 /***/ },
 /* 11 */
 /***/ function(module, exports, __webpack_require__) {
@@ -1984,7 +2102,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	});
 
-	var _io = __webpack_require__(3);
+	var _io = __webpack_require__(4);
 
 	Object.defineProperty(exports, 'asEffect', {
 	  enumerable: true,

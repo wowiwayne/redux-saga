@@ -29,7 +29,7 @@ export function* fetchData(action) {
 import { takeEvery } from 'redux-saga'
 
 function* watchFetchData() {
-  yield* takeEvery('FETCH_REQUESTED', fetchData)
+  yield takeEvery('FETCH_REQUESTED', fetchData)
 }
 ```
 
@@ -41,7 +41,7 @@ function* watchFetchData() {
 import { takeLatest } from 'redux-saga'
 
 function* watchFetchData() {
-  yield* takeLatest('FETCH_REQUESTED', fetchData)
+  yield takeLatest('FETCH_REQUESTED', fetchData)
 }
 ```
 
@@ -58,36 +58,12 @@ import { fork } from 'redux-saga/effects'
 // FETCH_USERS
 function* fetchUsers(action) { ... }
 
-function* watchFetchUsers() {
-  yield* takeEvery('FETCH_USERS', fetchUsers)
-}
-
 // CREATE_USER
 function* createUser(action) { ... }
 
-function* watchCreateUser() {
-  yield* takeEvery('CREATE_USER', createUser)
-}
-
-// 使用者 fork 兩個觀察者且併行啟動。
+// 在 parallel 使用它們
 export default function* rootSaga() {
-  yield fork(watchFetchUsers)
-  yield fork(watchCreateUser)
-}
-```
-
-另外你也可以使用這個簡短的型式：
-
-```javascript
-import { takeEvery } from 'redux-saga'
-import { fork } from 'redux-saga/effects'
-
-function* fetchUsers(action) { ... }
-function* createUser(action) { ... }
-
-// 在背景將啟動 takeEvery 並提供它的子參數。
-export default function* rootSaga() {
-  yield fork(takeEvery, 'FETCH_USERS', fetchUsers)
-  yield fork(takeEvery, 'CREATE_USER', createUser)
+  yield takeEvery('FETCH_USERS', fetchUsers)
+  yield takeEvery('CREATE_USER', createUser)
 }
 ```

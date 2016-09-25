@@ -34,35 +34,7 @@ function* logActions() {
 }
 ```
 
-### 當使用多個 `yield* takeEvery/yield* takeLatest`，Saga 忽略了 dispatch 的 action
-
-你可能在同一個 Saga 執行多個 `yield*`
-
-```javascript
-function* mySaga() {
-  yield* takeEvery(ACTION_1, doSomeWork)
-  yield* takeEvery(ACTION_2, doSomeWork)
-}
-```
-
-你可以在不同的 Saga 執行他們，或者執行使用 `yield [...]` 同時執行（沒有 `*`）
-
-```javascript
-function* mySaga() {
-  yield [
-    takeEvery(ACTION_1, doSomeWork),
-    takeEvery(ACTION_2, doSomeWork)
-  ]
-}
-```
-
-### 解釋
-
-`yeild` 使用*代理（delegate）* 控制給其他迭代器。在上面的範例，第一個 `takeEvery(ACTION_1, doSomeWork)` 回傳一個迭代物件。由於結合 `yield*` ，`mySaga` generator 將代理所有 `next()` 呼叫到被回傳的迭代器。意思說所有呼叫到 `mySaga` 的 `next(）` 將轉發到 `takeEvery()` 迭代器的 `next()`。在 `takeEvery(...)` 迭代器完成後，才會繼續第二個 `yield* takeEvery(ACTION_2, doSomeWork)`（由於 `takeEvery(...)` 執行一個 `while (true) {...}`，第一個迭代器如果沒有終止，第二個呼叫就不會繼續）。
-
-在 `yield [takeEvery(...), ...]` 形式中，middleware 將同時執行所有回傳的迭代器。
-
-### Saga 忽略 dispatch 的 action
+### Saga miss 被 dispatch 的 action
 
 確認 Saga 不會被阻塞在某些 effect，當 Saga 等待一個 Effect resolve，它不會 take 被 dispatch 的 action，直到 Effect 被 resolve。
 
@@ -85,14 +57,14 @@ function handleRequestAction(url, params) {
 當 `watchRequestActions` 執行 `yield call(handleRequestAction, url, params)` 時，它會在下一個 `yield take` 之前，等待 `handleRequestAction` 直到它終止回傳。例如，假設我們有一個事件的順序是這樣：
 
 ```
-UI                     watchRequestActions             handleRequestAction  
+UI                     watchRequestActions             handleRequestAction
 -----------------------------------------------------------------------------
 .......................take('REQUEST').......................................
 dispatch(REQUEST)......call(handleRequestAction).......call(someRemoteApi)... Wait server resp.
-.............................................................................   
+.............................................................................
 .............................................................................
 dispatch(REQUEST)............................................................ Action missed!!
-.............................................................................   
+.............................................................................
 .............................................................................
 .......................................................put(someAction).......
 .......................take('REQUEST')....................................... saga is resumed

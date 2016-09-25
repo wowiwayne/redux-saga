@@ -6,6 +6,7 @@
 * [`Saga Helpers`](#saga-helpers)
   * [`takeEvery(pattern, saga, ...args)`](#takeeverypattern-saga-args)
   * [`takeLatest(pattern, saga, ..args)`](#takelatestpattern-saga-args)
+  * [`throttle(ms, pattern, saga, ..args)`](#throttlems-pattern-saga-args)
 * [`Effect creators`](#effect-creators)
   * [`take(pattern)`](#takepattern)
   * [`takem(pattern)`](#takempattern)
@@ -135,7 +136,7 @@ function* fetchUser(action) {
 }
 
 function* watchFetchUser() {
-  yield* takeEvery('USER_REQUESTED', fetchUser)
+  yield takeEvery('USER_REQUESTED', fetchUser)
 }
 ```
 
@@ -145,10 +146,13 @@ function* watchFetchUser() {
 
 ```javascript
 function* takeEvery(pattern, saga, ...args) {
-  while (true) {
-    const action = yield take(pattern)
-    yield fork(saga, ...args.concat(action))
-  }
+  const task = yield fork(function* () {
+    while (true) {
+      const action = yield take(pattern)
+      yield fork(saga, ...args.concat(action))
+    }
+  })
+  return task
 }
 ```
 
@@ -180,7 +184,7 @@ function* fetchUser(action) {
 }
 
 function* watchLastFetchUser() {
-  yield* takeLatest('USER_REQUESTED', fetchUser)
+  yield takeLatest('USER_REQUESTED', fetchUser)
 }
 ```
 
@@ -190,13 +194,61 @@ function* watchLastFetchUser() {
 
 ```javascript
 function* takeLatest(pattern, saga, ...args) {
-  let lastTask
-  while (true) {
-    const action = yield take(pattern)
-    if (lastTask)
-      yield cancel(lastTask) // 如果 task 已經結束，cancel 是一個空操作
+  const task = yield fork(function* () {
+    let lastTask
+    while (true) {
+      const action = yield take(pattern)
+      if (lastTask)
+        yield cancel(lastTask) // 如果 task 已經被終止， cancel 是一個空操作
 
-    lastTask = yield fork(saga, ...args.concat(action))
+      lastTask = yield fork(saga, ...args.concat(action))
+    }
+  })
+  return task
+}
+```
+
+### `throttle(ms, pattern, saga, ...args)`
+
+在一個被 dispatch 的 action 到 Store match 的 `pattern` 產生一個 saga。在產生一個 task 之後，接受持續傳入的 action 至底層的 `buffer`，最多一個（最近的一次），但在相同 `ms` 毫秒時間產生一個新的 task（於是它的名稱叫 - `throttle`）。這樣做的目的是為了在給定的期間，處理 task 時忽略傳入的 action。
+
+- `ms: Number` - length of a time window in miliseconds during which actions will be ignored after the action starts processing
+
+- `pattern: String | Array | Function` - 更多資訊請參考文件 [`take(pattern)`](#takepattern)
+
+- `saga: Function` - 一個 Generator function
+
+- `args: Array<any>` - 啟動 task 時被傳送的參數。`throttle` 將傳入的 action 加入到參數清單（例如：action 將被當作最後一個參數提供給 `saga`）
+
+#### 範例
+
+在下面的範例中，我們建立一個簡單的 `fetchAutocomplete` task。我們使用 `throttle` 在被 dispatch `FETCH_AUTOCOMPLETE` action 上來啟動一個新的 `fetchAutocomplete` task。然而一旦 `throttle` 在某些時間忽略連續的 `FETCH_AUTOCOMPLETE`，我們確保使用者的 request 不會超過我們伺服器的限制。
+
+```javascript
+import { throttle } from `redux-saga`
+
+function* fetchAutocomplete(action) {
+  const autocompleteProposals = yield call(Api.fetchAutocomplete, action.text)
+  yield put({type: 'FETCHED_AUTOCOMPLETE_PROPOSALS', proposals: autocompleteProposals})
+}
+
+function* throttleAutocomplete() {
+  yield throttle(1000, 'FETCH_AUTOCOMPLETE', fetchAutocomplete)
+}
+```
+
+#### 注意
+
+`throttle` 是一個使用 `take`、`fork` 和 `actionChannel` 建立的高階 API。以下程式碼是如何實作 helper：
+
+```javascript
+function* throttle(ms, pattern, task, ...args) {
+  const throttleChannel = yield actionChannel(pattern, buffers.sliding(1))
+
+  while (true) {
+    const action = yield take(throttleChannel)
+    yield fork(task, ...args, action)
+    yield call(delay, ms)
   }
 }
 ```
@@ -472,6 +524,32 @@ function* takeOneAtMost() {
 }
 ```
 
+### `flush(channel)`
+
+建立一個 effect 指示 middleware 從 channel flush 所有被 buffer 的項目。被 flush 的項目會回傳到 saga，如果需要的話，可以被利用。
+
+- `channel: Channel` - 一個 [`Channel`](#channel) 物件。
+
+#### 範例
+
+```javascript
+
+function* saga() {
+  const chan = yield actionChannel('ACTION')
+
+  try {
+    while (true) {
+      const action = yield take(chan)
+      // ...
+    }
+  } finally {
+    const actions = yield flush(chan)
+    // ...
+  }
+
+}
+```
+
 ### `cancelled()`
 
 建立一個 Effect 描述，指示 middleware 去回傳這個 generator 是否已經被取消。通常你使用這個 Effect 在 finally 區塊執行取消特定的程式碼。
@@ -616,6 +694,8 @@ Channel interface 定義三個方法：`take`、`put` 和 `close`
 - 如果 channel 被關閉，put 不會有 effect
 - 如果是等待的 taker，調用舊的 taker 訊息
 - 除此之外，在底層緩衝 put 訊息
+
+`Channel.flush():` 使用從 channel 提出所有被 buffed 的訊息，清空 channel。
 
 `Channel.close():` 關閉 channel 意思說不允許更多被 put 的訊息。如果等待的 taker 沒有被緩衝的訊息，所有的 taker 將調用 `END`。如果有被緩衝的訊息，那些訊息將傳遞給第一個 taker 直到緩衝變成空的。剩下的 taker 將調用 `END`。
 
