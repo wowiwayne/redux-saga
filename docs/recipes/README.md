@@ -2,67 +2,25 @@
 
 ## Throttling
 
-你可以在 watcher Saga 內放置一個 delay，對一連串被 dispatch 的 action 節流。例如，假設當使用者在輸入框輸入文字時，UI 觸發一個 `INPUT_CHANGED` action。
+你可以一個使用一個內建方便的 `throttle` helper 調整被調用的 action 序列。例如，假設當使用者在輸入框輸入文字時，UI 觸發一個 `INPUT_CHANGED` action。
 
 ```javascript
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+import { throttle } from 'redux-saga'
 
 function* handleInput(input) {
   // ...
 }
 
 function* watchInput() {
-  while (true) {
-    const { input } = yield take('INPUT_CHANGED')
-    yield fork(handleInput, input)
-    // 阻塞 500 毫秒
-    yield call(delay, 500)
-  }
+  yield throttle(500, 'INPUT_CHANGED', handleInput)
 }
 ```
 
-透過在 `fork` 後放置一個 delay，`watchInput` 將被阻塞 500 毫秒，在這期間所有發生的 `INPUT_CHANGED` 都會被忽略。這是確保 Saga 在每 500 毫秒內只 dispatch 一個 `INPUT_CHANGED` action。
-
-但是在上面的程式碼還有一些問題。在 take 一個 action 之後，`watchInput` 將休眠 500 毫秒，意思說它在這個期間，將忽略所有發生的 action。這也許是 throttle（節流） 的目的，但是注意到 watcher 將也忽略 trailer action：例如最後一個 action 最後可能發生在這 500 毫秒內。如果你在輸入欄位 throttle 輸入的 action，這可能是不好的，因為你可能要到最後 500 毫秒 throttle 延遲過去才能反應最後的輸入。
-
-這裡是一個 track trailing action 更詳細的版本︰
-
-```javascript
-function* watchInput(wait) {
-  let lastAction
-  let lastTime = Date.now()
-  let countDown = 0 // 處理 leading action
-
-  while (true) {
-    const winner = yield race({
-      action: take('INPUT_CHANGED'),
-      timeout: countDown ? call(delay, countDown) : null
-    })
-    const now = Date.now()
-    countDown -= (now - lastTime)
-    lastTime = now
-
-    if (winner.action) {
-      lastAction = winner.action
-    }
-    if (lastAction && countDown <= 0) {
-      yield fork(worker, lastAction)
-      lastAction = null
-      countDown = wait
-    }
-  }
-}
-```
-
-在這個新版本，我們管理一個 `countDown` 變數來 track 剩下的 timeout。初始的 `countDown` 是 0，因為我們想要處理第一個 action。在處理完第一個 action 後，`countDown` 將被設定 throttle 期間的 `wait`。意思是我在處理下一個 action 之前，至少需要 `wait` 毫秒。
-
-然後在每次迭代時，我們在下一個最後的 action 和剩餘的 timeout 啟動一個 race。現在我們不會錯過任何的 action，我們保持 track 最後一個 `lastAction` 變數，我們也更新 `countDown` 和剩餘的 timeout。
-
-`if (lastAction && countDown <= 0) {...}` 區塊確保我們在 throttle 期間過期了（如果 `countDown` 小於等於 0），還可以處理最後的 trailing action（如果 `lastAction` 不是 null 或 undefined）。處理完 action 後，我們重置 `lastAction` 和 `countDown`，所以我們現在等待另一個 `wait` 毫秒期間，其他的 action 來處理它。
+透過使用這個 helper，`watchInput` 不會在 500ms 後啟動一個新的 `handleInput` task，但在相同的時間將持續接受最新的 `INPUT_CHANGED` action 到它的底層 `buffer`，所以它將錯過之間所有發生的 `INPUT_CHANGED` action。這是確保 Saga 在每 500ms 時，最多得到一個 `INPUT_CHANGED` action 並可以繼續處理後續的 action。
 
 ## Debouncing
 
-To debounce a sequence, put the `delay` in the forked task:
+為了 debounce 一個 sequence，put `delay` 在被 fork 的 task：
 
 ```javascript
 
@@ -102,7 +60,7 @@ function* handleInput({ input }) {
 
 function* watchInput() {
   // 將取消目前執行的 handleInput task
-  yield* takeLatest('INPUT_CHANGED', handleInput);
+  yield takeLatest('INPUT_CHANGED', handleInput);
 }
 ```
 
@@ -180,7 +138,7 @@ function* updateResource({ data }) {
 }
 
 export function* watchUpdateResource() {
-  yield* takeLatest('UPDATE_START', updateResource);
+  yield takeLatest('UPDATE_START', updateResource);
 }
 
 ```
@@ -222,7 +180,7 @@ function* onArchive() {
 function* main() {
   while (true) {
     // 在非阻塞 manner 監聽每個 `ARCHIVE_THREAD` action
-    const onArchiveTask = yield fork(takeEvery, ARCHIVE_THREAD, onArchive)
+    const onArchiveTask = yield takeEvery(ARCHIVE_THREAD, onArchive)
     // 等待使用者操作 undo action
     yield take(UNDO)
     // 然後取消 fetch task

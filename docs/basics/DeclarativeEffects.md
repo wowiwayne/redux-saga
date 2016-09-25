@@ -15,7 +15,7 @@ import { takeEvery } from 'redux-saga'
 import Api from './path/to/api'
 
 function* watchFetchProducts() {
-  yield* takeEvery('PRODUCTS_REQUESTED', fetchProducts)
+  yield takeEvery('PRODUCTS_REQUESTED', fetchProducts)
 }
 
 function* fetchProducts() {
@@ -57,7 +57,7 @@ Mock 讓測試更加困難而且不可靠。另一方面，那些只回傳數值
 {
   CALL: {
     fn: Api.fetch,
-    args: ['./products']  
+    args: ['./products']
   }
 }
 ```

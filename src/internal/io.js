@@ -12,32 +12,21 @@ const CANCEL  = 'CANCEL'
 const SELECT  = 'SELECT'
 const ACTION_CHANNEL = 'ACTION_CHANNEL'
 const CANCELLED  = 'CANCELLED'
+const FLUSH  = 'FLUSH'
 
 const effect = (type, payload) => ({[IO]: true, [type]: payload})
 
-export function take(channel, pattern) {
-  if(arguments.length >= 2) {
-    check(channel, is.notUndef, 'take(channel, pattern): channel is undefined')
-    check(channel, is.take, `take(channel, pattern): argument ${String(channel)} is not a valid channel (channel argument must have a take method)`)
-    check(pattern, is.notUndef, 'take(channel, pattern): pattern is undefined')
-    check(pattern, is.pattern, `take(channel, pattern): argument ${String(pattern)} is not a valid pattern (pattern must be String | Function: a => boolean | Array<String>)`)
-  } else if(arguments.length === 1) {
-    check(channel, is.notUndef, 'take(patternOrChannel): undefined argument')
-    if(!is.take(channel)) {
-      if(is.pattern(channel)) {
-        pattern = channel
-        channel = null
-      } else {
-        throw new Error(`take(patternOrChannel): argument ${String(channel)} is not valid channel or a valid pattern`)
-      }
-    } else {
-      pattern = '*'
-    }
-  } else {
-    pattern = '*'
+export function take(patternOrChannel = '*') {
+  if (arguments.length) {
+    check(arguments[0], is.notUndef, 'take(patternOrChannel): patternOrChannel is undefined')
   }
-
-  return effect(TAKE, {channel, pattern})
+  if (is.pattern(patternOrChannel)) {
+    return effect(TAKE, { pattern: patternOrChannel })
+  }
+  if (is.channel(patternOrChannel)) {
+    return effect(TAKE, { channel: patternOrChannel })
+  }
+  throw new Error(`take(patternOrChannel): argument ${String(patternOrChannel)} is not valid channel or a valid pattern`)
 }
 
 export function takem(...args) {
@@ -49,7 +38,7 @@ export function takem(...args) {
 export function put(channel, action) {
   if(arguments.length > 1) {
     check(channel, is.notUndef, 'put(channel, action): argument channel is undefined')
-    check(channel, is.put, `put(channel, action): argument ${channel} is not a valid channel (channel argument must have a put method)`)
+    check(channel, is.channel, `put(channel, action): argument ${channel} is not a valid channel`)
     check(action, is.notUndef, 'put(channel, action): argument action is undefined')
   } else {
     check(channel, is.notUndef, 'put(action): argument action is undefined')
@@ -151,6 +140,11 @@ export function cancelled() {
   return effect(CANCELLED, {})
 }
 
+export function flush(channel) {
+  check(channel, is.channel, `flush(channel): argument ${channel} is not valid channel`)
+  return effect(FLUSH, channel)
+}
+
 export const asEffect = {
   take    : effect => effect && effect[IO] && effect[TAKE],
   put     : effect => effect && effect[IO] && effect[PUT],
@@ -162,5 +156,6 @@ export const asEffect = {
   cancel  : effect => effect && effect[IO] && effect[CANCEL],
   select  : effect => effect && effect[IO] && effect[SELECT],
   actionChannel : effect => effect && effect[IO] && effect[ACTION_CHANNEL],
-  cancelled  : effect => effect && effect[IO] && effect[CANCELLED]
+  cancelled  : effect => effect && effect[IO] && effect[CANCELLED],
+  flush  : effect => effect && effect[IO] && effect[FLUSH]
 }

@@ -1,4 +1,4 @@
-import { is, check, remove , MATCH, internalErr} from './utils'
+import { is, check, remove, MATCH, internalErr} from './utils'
 import {buffers} from './buffers'
 
 const CHANNEL_END_TYPE = '@@redux-saga/CHANNEL_END'
@@ -36,15 +36,11 @@ if(process.env.NODE_ENV !== 'production') {
   `
 }
 
-export function channel(buffer) {
+export function channel(buffer = buffers.fixed()) {
   let closed = false
   let takers = []
 
-  if(arguments.length > 0) {
-    check(buffer, is.buffer, INVALID_BUFFER)
-  } else {
-    buffer = buffers.fixed()
-  }
+  check(buffer, is.buffer, INVALID_BUFFER)
 
   function checkForbiddenStates() {
     if(closed && takers.length) {
@@ -58,28 +54,25 @@ export function channel(buffer) {
   function put(input) {
     checkForbiddenStates()
     check(input, is.notUndef, UNDEFINED_INPUT_ERROR)
-    if(!closed) {
-      if(takers.length) {
-        for (var i = 0; i < takers.length; i++) {
-          const cb = takers[i]
-          if(!cb[MATCH] || cb[MATCH](input)) {
-            takers.splice(i, 1)
-            return cb(input)
-          }
-        }
-      } else {
-        buffer.put(input)
+    if (closed) {
+      return
+    }
+    if (!takers.length) {
+      return buffer.put(input)
+    }
+    for (var i = 0; i < takers.length; i++) {
+      const cb = takers[i]
+      if(!cb[MATCH] || cb[MATCH](input)) {
+        takers.splice(i, 1)
+        return cb(input)
       }
     }
   }
 
-  function take(cb, matcher) {
+  function take(cb) {
     checkForbiddenStates()
     check(cb, is.func, 'channel.take\'s callback must be a function')
-    if(arguments.length > 1) {
-      check(matcher, is.func, 'channel.take\'s matcher argument must be a function')
-      cb[MATCH] = matcher
-    }
+
     if(closed && buffer.isEmpty()) {
       cb(END)
     } else if(!buffer.isEmpty()) {
@@ -90,6 +83,16 @@ export function channel(buffer) {
     }
   }
 
+  function flush(cb) {
+    checkForbiddenStates() // TODO: check if some new state should be forbidden now
+    check(cb, is.func, 'channel.flush\' callback must be a function')
+    if (closed && buffer.isEmpty()) {
+      cb(END)
+      return
+    }
+    cb(buffer.flush())
+  }
+
   function close() {
     checkForbiddenStates()
     if(!closed) {
@@ -97,15 +100,14 @@ export function channel(buffer) {
       if(takers.length) {
         const arr = takers
         takers = []
-        for (var i = 0, len = arr.length; i < len; i++) {
+        for (let i = 0, len = arr.length; i < len; i++) {
           arr[i](END)
         }
-        takers = []
       }
     }
   }
 
-  return {take, put, close,
+  return {take, put, flush, close,
     get __takers__() { return takers },
     get __closed__() { return closed }
   }
@@ -135,11 +137,27 @@ export function eventChannel(subscribe, buffer = buffers.none(), matcher) {
 
   return {
     take: chan.take,
+    flush: chan.flush,
     close: () => {
       if(!chan.__closed__) {
         chan.close()
         unsubscribe()
       }
+    }
+  }
+}
+
+export function stdChannel(subscribe) {
+  const chan = eventChannel(subscribe)
+
+  return {
+    ...chan,
+    take(cb, matcher) {
+      if(arguments.length > 1) {
+        check(matcher, is.func, 'channel.take\'s matcher argument must be a function')
+        cb[MATCH] = matcher
+      }
+      chan.take(cb)
     }
   }
 }

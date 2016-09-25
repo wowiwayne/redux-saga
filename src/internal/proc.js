@@ -1,7 +1,7 @@
 import { noop, kTrue, is, log as _log, check, deferred, autoInc, remove, TASK, CANCEL, makeIterator } from './utils'
 import asap from './asap'
 import { asEffect } from './io'
-import { eventChannel, isEnd } from './channel'
+import { stdChannel as _stdChannel, eventChannel, isEnd } from './channel'
 import { buffers } from './buffers'
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -97,21 +97,64 @@ function forkQueue(name, mainTask, cb) {
   }
 }
 
+function createTaskIterator({context, fn, args}) {
+  if (is.iterator(fn)) {
+    return fn
+  }
+
+  // catch synchronous failures; see #152 and #441
+  let result, error
+  try {
+    result = fn.apply(context, args)
+  } catch(err) {
+    error = err
+  }
+
+  // i.e. a generator function returns an iterator
+  if (is.iterator(result)) {
+    return result
+  }
+
+  // do not bubble up synchronous failures for detached forks
+  // instead create a failed task. See #152 and #441
+  return error
+    ? makeIterator(() => { throw error })
+    : makeIterator((function() {
+        let pc
+        const eff = {done: false, value: result}
+        const ret = value => ({done: true, value})
+        return arg => {
+          if(!pc) {
+            pc = true
+            return eff
+          } else {
+            return ret(arg)
+          }
+        }
+      })())
+}
+
+function wrapHelper(helper) {
+  return {
+    fn: helper
+  }
+}
+
 export default function proc(
   iterator,
   subscribe = () => noop,
   dispatch = noop,
   getState = noop,
-  options={},
+  options = {},
   parentEffectId = 0,
   name = 'anonymous',
   cont
 ) {
   check(iterator, is.iterator, NOT_ITERATOR_ERROR)
 
-  const {sagaMonitor, logger} = options
+  const {sagaMonitor, logger, onError} = options
   const log = logger || _log
-  const stdChannel = eventChannel(subscribe)
+  const stdChannel = _stdChannel(subscribe)
   /**
     Tracks the current effect cancellation
     Each time the generator progresses. calling runEffect will set a new value
@@ -248,6 +291,9 @@ export default function proc(
       }
       if(!task.cont) {
         log('error', `uncaught`, result.sagaStack || result.stack)
+        if((result instanceof Error) && onError) {
+          onError(result)
+        }
       }
       iterator._error = result
       iterator._isAborted = true
@@ -329,23 +375,26 @@ export default function proc(
     let data
     return (
       // Non declarative effect
-        is.promise(effect)  ? resolvePromise(effect, currCb)
-      : is.iterator(effect) ? resolveIterator(effect, effectId, name, currCb)
+        is.promise(effect)                                   ? resolvePromise(effect, currCb)
+      : is.helper(effect)                                    ? runForkEffect(wrapHelper(effect), effectId, currCb)
+      : is.iterator(effect)                                  ? resolveIterator(effect, effectId, name, currCb)
+
 
       // declarative effects
-      : is.array(effect)                        ? runParallelEffect(effect, effectId, currCb)
-      : (is.notUndef(data = asEffect.take(effect)))   ? runTakeEffect(data, currCb)
-      : (is.notUndef(data = asEffect.put(effect)))    ? runPutEffect(data, currCb)
-      : (is.notUndef(data = asEffect.race(effect)))   ? runRaceEffect(data, effectId, currCb)
-      : (is.notUndef(data = asEffect.call(effect)))   ? runCallEffect(data, effectId, currCb)
-      : (is.notUndef(data = asEffect.cps(effect)))    ? runCPSEffect(data, currCb)
-      : (is.notUndef(data = asEffect.fork(effect)))   ? runForkEffect(data, effectId, currCb)
-      : (is.notUndef(data = asEffect.join(effect)))   ? runJoinEffect(data, currCb)
-      : (is.notUndef(data = asEffect.cancel(effect))) ? runCancelEffect(data, currCb)
-      : (is.notUndef(data = asEffect.select(effect))) ? runSelectEffect(data, currCb)
+      : is.array(effect)                                     ? runParallelEffect(effect, effectId, currCb)
+      : (is.notUndef(data = asEffect.take(effect)))          ? runTakeEffect(data, currCb)
+      : (is.notUndef(data = asEffect.put(effect)))           ? runPutEffect(data, currCb)
+      : (is.notUndef(data = asEffect.race(effect)))          ? runRaceEffect(data, effectId, currCb)
+      : (is.notUndef(data = asEffect.call(effect)))          ? runCallEffect(data, effectId, currCb)
+      : (is.notUndef(data = asEffect.cps(effect)))           ? runCPSEffect(data, currCb)
+      : (is.notUndef(data = asEffect.fork(effect)))          ? runForkEffect(data, effectId, currCb)
+      : (is.notUndef(data = asEffect.join(effect)))          ? runJoinEffect(data, currCb)
+      : (is.notUndef(data = asEffect.cancel(effect)))        ? runCancelEffect(data, currCb)
+      : (is.notUndef(data = asEffect.select(effect)))        ? runSelectEffect(data, currCb)
       : (is.notUndef(data = asEffect.actionChannel(effect))) ? runChannelEffect(data, currCb)
-      : (is.notUndef(data = asEffect.cancelled(effect))) ? runCancelledEffect(data, currCb)
-      : /* anything else returned as is        */ currCb(effect)
+      : (is.notUndef(data = asEffect.flush(effect)))         ? runFlushEffect(data, currCb)
+      : (is.notUndef(data = asEffect.cancelled(effect)))     ? runCancelledEffect(data, currCb)
+      : /* anything else returned as is        */              currCb(effect)
     )
   }
 
@@ -433,54 +482,19 @@ export default function proc(
   }
 
   function runForkEffect({context, fn, args, detached}, effectId, cb) {
-    let result, error, _iterator
-
-    // we run the function, next we'll check if this is a generator function
-    // (generator is a function that returns an iterator)
-
-    // catch synchronous failures; see #152 and #441
-    try {
-      result = fn.apply(context, args)
-    } catch(err) {
-      error = err
-    }
-
-    // A generator function: i.e. returns an iterator
-    if(is.iterator(result)) {
-      _iterator = result
-    }
-
-    // do not bubble up synchronous failures for detached forks
-    // instead create a failed task. See #152 and #441
-    else {
-      _iterator = (error ?
-        makeIterator(() => { throw error })
-        : makeIterator((function() {
-            let pc
-            const eff = {done: false, value: result}
-            const ret = value => ({done: true, value})
-            return arg => {
-              if(!pc) {
-                pc = true
-                return eff
-              } else {
-                return ret(arg)
-              }
-            }
-          })())
-      )
-    }
+    const taskIterator = createTaskIterator({context, fn, args})
 
     asap.suspend()
-    let task = proc(_iterator, subscribe, dispatch, getState, options, effectId, fn.name, (detached ? null : noop))
+    const task = proc(taskIterator, subscribe, dispatch, getState, options, effectId, fn.name, (detached ? null : noop))
+
     if(detached) {
       cb(task)
     } else {
-      if(_iterator._isRunning) {
+      if(taskIterator._isRunning) {
         taskQueue.addTask(task)
         cb(task)
-      } else if(_iterator._error) {
-        taskQueue.abort(_iterator._error)
+      } else if(taskIterator._error) {
+        taskQueue.abort(taskIterator._error)
       } else {
         cb(task)
       }
@@ -603,6 +617,10 @@ export default function proc(
 
   function runCancelledEffect(data, cb) {
     cb(!!mainTask.isCancelled)
+  }
+
+  function runFlushEffect(channel, cb) {
+    channel.flush(cb)
   }
 
   function newTask(id, name, iterator, cont) {

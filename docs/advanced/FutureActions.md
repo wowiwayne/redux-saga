@@ -15,7 +15,7 @@ import { takeEvery } from 'redux-saga'
 import { put, select } from 'redux-saga/effects'
 
 function* watchAndLog() {
-  yield* takeEvery('*', function* logger(action) {
+  yield takeEvery('*', function* logger(action) {
     const state = yield select()
 
     console.log('action', action)
