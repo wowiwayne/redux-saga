@@ -102,7 +102,7 @@ sagaMiddleware.run(mySaga)
 
 # 文件
 
-- [介紹](http://yelouafi.github.io/redux-saga/docs/introduction/index.html)
+- [介紹](http://yelouafi.github.io/redux-saga/docs/introduction/BeginnerTutorial.html)
 - [基本概念](http://yelouafi.github.io/redux-saga/docs/basics/index.html)
 - [進階概念](http://yelouafi.github.io/redux-saga/docs/advanced/index.html)
 - [Recipes](http://yelouafi.github.io/redux-saga/docs/recipes/index.html)

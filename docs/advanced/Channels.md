@@ -165,7 +165,7 @@ export function* saga() {
 假設你等待伺服器的一個 `ping` 訊息，然後在 delay 後回覆一個 `pong` 訊息。
 
 ```javascript
-import { take, put, call } from 'redux-saga/effects'
+import { take, put, call, apply } from 'redux-saga/effects'
 import { eventChannel, delay } from 'redux-saga'
 import { createWebSocketConnection } from './socketConnection'
 
@@ -188,7 +188,7 @@ function createSocketChannel(socket) {
     // subscriber 必須回傳一個取消訂閱的 function
     // 當 saga 呼叫 `channel.close` 方法時將被調用
     const unsubscribe = () => {
-      socket.off('ping', pongHandler)
+      socket.off('ping', pingHandler)
     }
 
     return unsubscribe

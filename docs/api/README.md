@@ -27,6 +27,7 @@
   * [`cancel(task)`](#canceltask)
   * [`select(selector, ...args)`](#selectselector-args)
   * [`actionChannel(pattern, [buffer])`](#actionchannelpattern-buffer)
+  * [`flush(channel)`](#flushchannel)
   * [`cancelled()`](#cancelled)
 * [`Effect combinators`](#effect-combinators)
   * [`race(effects)`](#raceeffects)
@@ -54,7 +55,9 @@
 
 - `sagaMonitor` : [SagaMonitor](#sagamonitor) - 如果提供一個 Saga Monitor，middleware 將提供監視事件給 monitor。
 
-- `logger` : Function -  定義一個自訂的 logger middleware。預設上，middleware 記錄所有錯誤並在 console 中警告。告訴 middleware 傳送錯誤或警告到提供的 logger。被呼叫的 logger 與它的參數 `(level, ...args)`，第一個說明記錄的層級：('info', 'warning' or 'error')。其餘部分對應於以下參數（你可以使用 `args.join(' ') 來連接所有參數成為一個單一的字串`）。
+- `logger` : Function - 定義一個自訂的 logger middleware。預設上，middleware 記錄所有錯誤並在 console 中警告。告訴 middleware 傳送錯誤或警告到提供的 logger。被呼叫的 logger 與它的參數 `(level, ...args)`，第一個說明記錄的層級：('info', 'warning' or 'error')。其餘部分對應於以下參數（你可以使用 `args.join(' ') 來連接所有參數成為一個單一的字串`）。
+
+- `onError` : Function - 如果提供此 function，middleware 將從 Saga 呼叫沒有被捕獲的錯誤。對於追蹤錯誤且傳送未捕獲的例外相當有用。
 
 #### 範例
 
@@ -695,7 +698,7 @@ Channel interface 定義三個方法：`take`、`put` 和 `close`
 - 如果是等待的 taker，調用舊的 taker 訊息
 - 除此之外，在底層緩衝 put 訊息
 
-`Channel.flush():` 使用從 channel 提出所有被 buffed 的訊息，清空 channel。
+`Channel.flush():` 用於從 channel 提出所有被 buffer 的訊息，清空 channel。
 
 `Channel.close():` 關閉 channel 意思說不允許更多被 put 的訊息。如果等待的 taker 沒有被緩衝的訊息，所有的 taker 將調用 `END`。如果有被緩衝的訊息，那些訊息將傳遞給第一個 taker 直到緩衝變成空的。剩下的 taker 將調用 `END`。
 
@@ -842,7 +845,9 @@ const countdown = (secs) => {
 
 - `buffers.fixed(limit)`: 新訊息將會被緩衝到 `limit`。Overflow 會發生錯誤。省略 `limit` 的值將導致無限的緩衝。
 
-- `buffers.dropping(limit)`: 像是 `fixed`，但是 Overflow 時將丟棄訊息。
+- `buffers.dropping(limit)`: 像是 `fixed`，但是 Overflow 將導致 buffer 動態的擴展。
+
+- `buffers.dropping(limit)`: 像是 `fixed`，但是 Overflow 將自動的丟棄訊息。
 
 - `buffers.sliding(limit)`: 像是 `fixed`，但是 Overflow 時在結束時新增新訊息，並丟棄在 buffer 的舊訊息。
 
